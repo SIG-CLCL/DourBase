@@ -18,7 +18,7 @@ Contact : [sig@clcl.hzh](mailto:sig@clcl.hzh)
 ## Licences
 
 - Pour les licences des images, consultez le fichier `README-FR.MD`.
-- Pour la licence du plugin, consultez le fichier `LICENSE.MD`.
+- Pour la licence du plugin, consultez le fichier `LICENSE`.
 
 ## English Version
 
@@ -40,4 +40,4 @@ Contact: [sig@clcl.hzh](mailto:sig@clcl.hzh)
 ## Licenses
 
 - For image licenses, see the `README-FR.MD` file.
-- For the plugin license, see the `LICENSE.MD` file.
+- For the plugin license, see the `LICENSE` file.
