@@ -15,15 +15,15 @@ class DourBase:
     def initGui(self):
         plugin_dir = os.path.dirname(__file__)
         icon_path = os.path.join(plugin_dir, 'icon.svg')
-        self.action = QAction(QIcon(icon_path),"Réseaux Imports", self.iface.mainWindow())
+        self.action = QAction(QIcon(icon_path),"DourBase", self.iface.mainWindow())
 
         self.action.triggered.connect(self.run)
         self.iface.addToolBarIcon(self.action)
-        self.iface.addPluginToMenu("&Réseaux Imports", self.action)
+        self.iface.addPluginToMenu("&DourBase", self.action)
 
     def unload(self):
         self.iface.removeToolBarIcon(self.action)
-        self.iface.removePluginMenu("&Réseaux Imports", self.action)
+        self.iface.removePluginMenu("&DourBase", self.action)
 
     def run(self):
         valeur = s.value("DourBase/is_first_start", "False")

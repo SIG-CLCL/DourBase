@@ -130,7 +130,7 @@ class DourBaseDialog(QDialog):
         self.FOLDER = ''
         self._database_password = ""
         self._database_schema = ""
-        self.setWindowTitle("Réseaux Imports")
+        self.setWindowTitle("DourBase")
 
 
         ############################################################
