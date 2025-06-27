@@ -1,0 +1,41 @@
+name: Create ZIP Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create and populate DourBase directory
+        run: |
+          mkdir DourBase
+          # On déplace tous les fichiers/dossiers sauf .git, .github, et DourBase lui-même
+          for file in * .[^.]*; do
+            if [ "$file" != ".git" ] && [ "$file" != ".github" ] && [ "$file" != "DourBase" ]; then
+              mv "$file" DourBase/
+            fi
+          done
+
+      - name: Create ZIP archive
+        run: zip -r DourBase.zip DourBase/
+      - name: Get current date
+        id: date
+        run: echo "DATE=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || 'v1.0.0' }}-${{ steps.date.outputs.DATE }}
+          name: Release ${{ github.ref_name || 'v1.0.0' }}-${{ steps.date.outputs.DATE }}
+          body: "New Release of the plugin"
+          files: DourBase.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

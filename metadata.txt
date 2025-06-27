@@ -1,0 +1,8 @@
+[general]
+name=Réseaux Imports
+description=Réseaux Imports est une extension QGIS conçue pour simplifier l'intégration des plans de récolement conformes au cahier des charges GéoPaysdeBrest. Elle inclut également la gestion des identifiants grâce au plugin rsxident de Géodis. De plus, elle permet de mettre à jour les données entre la base de travail et la base de consultation.
+version=0.1
+qgisMinimumVersion=3.0
+author=CLCL
+email=sig@clcl.bzh
+icon=icon.svg

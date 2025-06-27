@@ -1,0 +1,2 @@
+* `blank` : les fichiers vides. Le plugin s'en sert pour ajouter des zones vides dans la base de données
+* `convert` : le plugin copie ici les fichiers de `blank` et/ou les fichiers saisir par l'utilisateur afin de les traiter.

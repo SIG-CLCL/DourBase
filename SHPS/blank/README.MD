@@ -1,0 +1,2 @@
+# ATTENTION ! 
+Ne modifiez ni supprimez aucun des fichiers de ce dossier. Si vous pensez avoir supprimé et/ou modifié l'un des fichiers, il est recommandé de réinstaller le plugin afin de s'assurer le bon fonctionnement du plugin.
