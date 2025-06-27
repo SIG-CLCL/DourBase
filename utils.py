@@ -5,11 +5,18 @@ import shutil
 from qgis.core import QgsDataSourceUri
 from qgis.PyQt.QtCore import QSettings
 from PyQt5.QtSql import QSqlDatabase, QSqlQuery
+
+log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
 logging.basicConfig(
-    filename=os.path.join(os.path.dirname(os.path.abspath(__file__)),'logs', 'plugin.log'),
-    level=logging.INFO,  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    filename=os.path.join(log_dir, 'plugin.log'),
+    level=logging.INFO,  # Niveau de log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+
 def update_file_name(depco, num_source, aep=False, eu=False, epl=False):
     if not aep and not eu and not epl:
         raise ValueError("At least one argument (aep/eu/epl) should be True.")
