@@ -2,7 +2,7 @@
 name=DourBase
 description=DourBase est une extension QGIS faite par la Communauté Lesneven Côte des Légendes (CLCL)
 about=DourBase est une extension QGIS conçue pour simplifier l'intégration des plans de récolement conformes au cahier des charges GéoPaysdeBrest. Elle inclut également la gestion des identifiants grâce au plugin rsxident de Géodis. De plus, elle permet de mettre à jour les données entre la base de travail et la base de consultation.
-version=0.1
+version=1.0
 qgisMinimumVersion=3.0
 author=Communauté Lesneven Côte des Légendes (CLCL)
 email=sig@clcl.bzh
