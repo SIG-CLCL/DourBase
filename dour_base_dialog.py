@@ -1375,7 +1375,7 @@ class DourBaseDialog(QDialog):
             if db == "db_consultation":
                 db_consultation = db_dict
                 schemas = get_shamas(db_consultation["host"], db_consultation["port"], db_consultation["dbname"],
-                                     db_consultation["user"],
+                                     self.db_username.text(),
                                      self.db_password.text())
                 self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
                 self.log_to_console(f"[INFO] Affichage de la popup de seléction du schéma")
@@ -1394,7 +1394,7 @@ class DourBaseDialog(QDialog):
             else:
                 db_work = db_dict
                 schemas = get_shamas(db_work["host"], db_work["port"], db_work["dbname"],
-                                     db_work["user"],
+                                     self.db_username.text(),
                                      self.db_password.text())
                 self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
                 self.log_to_console(f"[INFO] Affichage de la popup de seléction du schéma")
