@@ -416,11 +416,13 @@ class DourBaseDialog(QDialog):
 
         self.deploy_layout.addWidget(QLabel(f"Nom d'utilisateur"))
         self.db_username = QLineEdit()
+        self.db_username.textChanged.connect(self.update_deploy_button_state)
         self.deploy_layout.addWidget(self.db_username)
 
         self.deploy_layout.addWidget(QLabel(f"Mot de passe des bases de données :"))
         self.db_password = QLineEdit()
         self.db_password.setEchoMode(QLineEdit.Password)
+        self.db_password.textChanged.connect(self.update_deploy_button_state)
         self.deploy_layout.addWidget(self.db_password)
 
         self.backup_postgis_path_label = QLabel("Le dossier selectionné pour la backup postgis apparaitera ici.")
@@ -619,6 +621,7 @@ class DourBaseDialog(QDialog):
         if dir_path:
             self.backup_consultation_path_label.setText(f"Dossier selectionné pour la backup postgis :\n{dir_path}")
             self.backup_consultation_path = dir_path
+            self.update_deploy_button_state()
 
     def select_directory_postgis(self):
         dir_path = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
@@ -626,21 +629,38 @@ class DourBaseDialog(QDialog):
         if dir_path:
             self.backup_postgis_path_label.setText(f"Dossier selectionné pour la backup postgis :\n{dir_path}")
             self.backup_postgis_path = dir_path
+            self.update_deploy_button_state()
 
     def update_deploy_button_state(self):
-        # 1. Les deux bases doivent être différentes et non vides
+        # 1. Vérifier que les champs utilisateur et mot de passe ne sont pas vides
+        username_valid = bool(self.db_username.text().strip())
+        password_valid = bool(self.db_password.text())
+        
+        # 2. Vérifier que les deux bases sont sélectionnées et différentes
         work_db = self.db_work_combo.currentText()
         consult_db = self.db_consultation_combo.currentText()
+        databases_selected = bool(work_db and consult_db)
         conflict = (work_db == consult_db) and work_db != ""
         self.db_conflict_label.setVisible(conflict)
-
-        # 2. Vérifier si un dossier de backup postgis a été sélectionné
-        backup_label_text = self.backup_postgis_path_label.text()
+        
+        # 3. Vérifier que les dossiers de backup sont sélectionnés
+        backup_postgis_text = self.backup_postgis_path_label.text()
+        backup_consultation_text = self.backup_consultation_path_label.text()
         backup_default_text = "Le dossier selectionné pour la backup postgis apparaitera ici."
-        backup_path_postgis_valid = backup_label_text != backup_default_text
-
-        # 3. Activer le bouton seulement si pas de conflit ET backup sélectionné
-        self.deploy_button.setEnabled(backup_path_postgis_valid and not conflict)
+        backup_path_postgis_valid = backup_postgis_text != backup_default_text and hasattr(self, 'backup_postgis_path')
+        backup_path_consultation_valid = backup_consultation_text != backup_default_text and hasattr(self, 'backup_consultation_path')
+        
+        # Activer le bouton seulement si toutes les conditions sont remplies
+        all_conditions_met = (
+            username_valid and 
+            password_valid and 
+            databases_selected and 
+            not conflict and 
+            backup_path_postgis_valid and 
+            backup_path_consultation_valid
+        )
+        
+        self.deploy_button.setEnabled(all_conditions_met)
 
     def find_postgres_dirs(self,base_dir):
         try:
