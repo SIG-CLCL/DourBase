@@ -495,7 +495,7 @@ class DourBaseDialog(QDialog):
         self.update_dir_path_display()
         label = QLabel(
             'Pour tout bug, erreur, question ou autre, n\'hésitez pas à ouvrir une issue sur le repo github du plugin : '
-            '<a href="https://github.com/SIG-CLCL">https://github.com/SIG-CLCL</a>'
+            '<a href="https://github.com/SIG-CLCL/DourBase/issues">https://github.com/SIG-CLCL/DourBase/issues</a>'
         )
         label.setTextFormat(Qt.RichText)
         label.setOpenExternalLinks(True)
