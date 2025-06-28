@@ -16,12 +16,14 @@ jobs:
       - name: Create and populate DourBase directory
         run: |
           mkdir DourBase
-          # On déplace tous les fichiers/dossiers sauf .git, .github, et DourBase lui-même
-          for file in * .[^.]*; do
-            if [ "$file" != ".git" ] && [ "$file" != ".github" ] && [ "$file" != "DourBase" ]; then
+          for file in *; do
+            if [[ "$file" != "DourBase" ]]; then
               mv "$file" DourBase/
             fi
           done
+          if [ -f LICENSE.MD ]; then
+            cp LICENSE.MD DourBase/LICENSE
+          fi
 
       - name: Create ZIP archive
         run: zip -r DourBase.zip DourBase/
