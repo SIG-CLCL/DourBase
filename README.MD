@@ -1,6 +1,6 @@
 ![banner](https://raw.githubusercontent.com/SIG-CLCL/DourBase/refs/heads/master/banner.png)
 
-**Réseaux Imports** est une extension QGIS conçue pour simplifier l'intégration des plans de récolement conformes au cahier des charges GéoPaysdeBrest. Elle inclut également la gestion des identifiants grâce au plugin rsxident de Géodis. De plus, elle permet de mettre à jour les données entre la base de travail et la base de consultation.
+**DourBase** est une extension QGIS conçue pour simplifier l'intégration des plans de récolement conformes au cahier des charges GéoPaysdeBrest. Elle inclut également la gestion des identifiants grâce au plugin rsxident de Géodis. De plus, elle permet de mettre à jour les données entre la base de travail et la base de consultation.
 
 
 ## Fonctionnalités principales
@@ -24,7 +24,7 @@ Contact : [sig@clcl.hzh](mailto:sig@clcl.hzh)
 
 ![banner](https://raw.githubusercontent.com/SIG-CLCL/DourBase/refs/heads/master/banner.png)
 
-**Réseaux Imports** is a QGIS extension designed to simplify the integration of as-built plans compliant with the GéoPaysdeBrest specifications. It also includes the management of identifiers through the rsxident plugin by Géodis. Additionally, it allows for updating data between the working database and the consultation database.
+**DourBase** is a QGIS extension designed to simplify the integration of as-built plans compliant with the GéoPaysdeBrest specifications. It also includes the management of identifiers through the rsxident plugin by Géodis. Additionally, it allows for updating data between the working database and the consultation database.
 
 ## Main Features
 
