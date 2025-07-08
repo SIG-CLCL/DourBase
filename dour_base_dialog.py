@@ -425,7 +425,7 @@ class DourBaseDialog(QDialog):
         self.db_password.textChanged.connect(self.update_deploy_button_state)
         self.deploy_layout.addWidget(self.db_password)
 
-        self.backup_postgis_path_label = QLabel("Le dossier selectionné pour la backup postgis apparaitera ici.")
+        self.backup_postgis_path_label = QLabel("Le dossier sélectionné pour la sauvegarde PostGIS apparaîtra ici.")
         self.deploy_layout.addWidget(self.backup_postgis_path_label)
 
         self.backup_postgis_path_button = QPushButton("Select Directory")
@@ -433,7 +433,7 @@ class DourBaseDialog(QDialog):
         self.backup_postgis_path_button.clicked.connect(self.select_directory_postgis)
         self.deploy_layout.addWidget(self.backup_postgis_path_button)
 
-        self.backup_consultation_path_label = QLabel("Le dossier selectionné pour la backup postgis apparaitera ici.")
+        self.backup_consultation_path_label = QLabel("Le dossier sélectionné pour la sauvegarde PostGIS apparaîtra ici.")
         self.deploy_layout.addWidget(self.backup_consultation_path_label)
 
         self.backup_consultation_path_button = QPushButton("Select Directory")
@@ -619,7 +619,7 @@ class DourBaseDialog(QDialog):
         dir_path = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
 
         if dir_path:
-            self.backup_consultation_path_label.setText(f"Dossier selectionné pour la backup postgis :\n{dir_path}")
+            self.backup_consultation_path_label.setText(f"Dossier sélectionné pour la sauvegarde PostGIS :\n{dir_path}")
             self.backup_consultation_path = dir_path
             self.update_deploy_button_state()
 
@@ -627,7 +627,7 @@ class DourBaseDialog(QDialog):
         dir_path = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
 
         if dir_path:
-            self.backup_postgis_path_label.setText(f"Dossier selectionné pour la backup postgis :\n{dir_path}")
+            self.backup_postgis_path_label.setText(f"Dossier sélectionné pour la sauvegarde PostGIS :\n{dir_path}")
             self.backup_postgis_path = dir_path
             self.update_deploy_button_state()
 
@@ -646,7 +646,7 @@ class DourBaseDialog(QDialog):
         # 3. Vérifier que les dossiers de backup sont sélectionnés
         backup_postgis_text = self.backup_postgis_path_label.text()
         backup_consultation_text = self.backup_consultation_path_label.text()
-        backup_default_text = "Le dossier selectionné pour la backup postgis apparaitera ici."
+        backup_default_text = "Le dossier sélectionné pour la sauvegarde PostGIS apparaîtra ici."
         backup_path_postgis_valid = backup_postgis_text != backup_default_text and hasattr(self, 'backup_postgis_path')
         backup_path_consultation_valid = backup_consultation_text != backup_default_text and hasattr(self, 'backup_consultation_path')
         
@@ -773,7 +773,7 @@ class DourBaseDialog(QDialog):
             schemas = get_shamas(params["host"], params["port"], params["dbname"], params["user"], params['password'])
             schema, ok = QInputDialog.getItem(
                 self, "Schema",
-                "Veuillez selectionner le schéma désiré :",
+                "Veuillez sélectionner le schéma désiré :",
                 schemas, 0, False
             )
             if not ok or not schema:
@@ -1348,7 +1348,7 @@ class DourBaseDialog(QDialog):
 
         combo = QComboBox(popup)
         combo.addItems(groupes)
-        layout.addWidget(QLabel("Selectionnez le groupe d'utilisateurs de consultation"))
+        layout.addWidget(QLabel("Sélectionnez le groupe d'utilisateurs de consultation :"))
         layout.addWidget(combo)
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=popup)
         layout.addWidget(button_box)
@@ -1398,15 +1398,15 @@ class DourBaseDialog(QDialog):
                                      self.db_username.text(),
                                      self.db_password.text())
                 self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
-                self.log_to_console(f"[INFO] Affichage de la popup de seléction du schéma")
+                self.log_to_console(f"[INFO] Affichage de la popup de sélection du schéma")
                 schema, ok = QInputDialog.getItem(self, "Schema",
-                                                  "Veuillez selectionner le schéma désiré pour la base de données de consultation (celui-ci sera supprimé, puis recréé avec les nouvelles données) :",
+                                                  "Veuillez sélectionner le schéma désiré pour la base de données de consultation (celui-ci sera supprimé, puis recréé avec les nouvelles données) :",
                                                   schemas, 0, False)
 
                 self.log_to_console(f"[INFO] Popup affichée. En attente de la réponse de l'utilisateur")
                 if ok and schema:
 
-                    self.log_to_console(f"[INFO] L'utilisateur a selectionné '{schema}' ")
+                    self.log_to_console(f"[INFO] L'utilisateur a sélectionné '{schema}' ")
                     db_consultation["schema"] = schema
                 else:
                     self.log_to_console(f"[WARNING] L'utilisateur n'a rien selectionné. Aborting.")
@@ -1417,16 +1417,16 @@ class DourBaseDialog(QDialog):
                                      self.db_username.text(),
                                      self.db_password.text())
                 self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
-                self.log_to_console(f"[INFO] Affichage de la popup de seléction du schéma")
+                self.log_to_console(f"[INFO] Affichage de la popup de sélection du schéma")
                 schema, ok = QInputDialog.getItem(self, "Schema",
-                                                  "Veuillez selectionner le schéma désiré pour la base de données de travail :",
+                                                  "Veuillez sélectionner le schéma désiré pour la base de données de travail :",
                                                   schemas, 0, False)
                 self.log_to_console(f"[INFO] Popup affichée. En attente de la réponse de l'utilisateur")
                 if ok and schema:
                     self.log_to_console(f"[INFO] L'utilisateur a selectionné '{schema}' ")
                     db_work["schema"] = schema
                 else:
-                    self.log_to_console(f"[WARNING] L'utilisateur n'a rien selectionné. Aborting.")
+                    self.log_to_console(f"[WARNING] L'utilisateur n'a rien sélectionné. Aborting.")
                     self.tabs.removeTab(4)
                     return
 
@@ -1541,12 +1541,12 @@ class DourBaseDialog(QDialog):
 
             finally:
                 self.log_to_console(
-                    f"[INFO] Supression du batch temporaire")
+                    f"[INFO] Suppression du batch temporaire")
                 try:
                     os.unlink(bat_path)
 
                     self.log_to_console(
-                        f"[INFO] Supression terminée")
+                        f"[INFO] Suppression terminée")
                 except:
                     pass
             command2 = f"GRANT USAGE ON SCHEMA {db_consultation['schema']} TO {group};"
@@ -1567,7 +1567,7 @@ class DourBaseDialog(QDialog):
             MessagesBoxes.error(self, "Erreur", f"Erreur lors du déploiement : {e}", savelog=True,
                                 console_logs=self.console_textedit.toPlainText())
         finally:
-            MessagesBoxes.succes(self, "Information", "Déploiement terminé", savelog=True, console_logs=self.console_textedit.toPlainText())
+            MessagesBoxes.succes(self, "Information", "Déploiement terminé.", savelog=True, console_logs=self.console_textedit.toPlainText())
         # continuer la boucle de manière dégueu, mais bon faute de meilleur idée...
         # le but est de ne pas terminer le processus, on attends un certain nombre de secondes pour après fermer l'onglet console. Cela dis, ça ne sera pas super fluide, étant donné que l'interface sera mise à jour toute les 0.1 secondes.
         for item in range(1000):
