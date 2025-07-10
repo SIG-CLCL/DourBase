@@ -1059,25 +1059,25 @@ class DourBaseDialog(QDialog):
             f"* fichiers shp : {self.SHP}\n"
             f"* depco : {depco}\n"
             f"* num_source : {num_source}\n"
-            f'* aep : {'non' if aep == '' else 'oui'}\n'
-            f'* eu : {'non' if eu == '' else 'oui'}\n'
-            f'* epl : {'non' if epl == '' else 'oui'}\n'
-            f'* cote : {'non' if cote == '' else 'oui'}\n'
-            f'* utilisat : {utilisat}\n'
-            f'* no_origine : {'Données vides' if no_origine == '' else no_origine}\n'
-            f'* localisat : {'localisat non renseigné' if localisat == '' else localisat}\n'
-            f'* date de plan : {date_str}\n'
-            f'* type de plan : {'type de plan non renseigné' if type_plan == '' else type_plan}\n'
-            f'* bureau d\'étude : {'bureau d\'étude non renseigné' if b_etude == '' else b_etude}\n'
-            f'* entreprise {entreprise}\n'
-            f'* échelle : {'échelle non renseigné' if echelle == '' else echelle}\n'
-            f'* etat : {etat}\n'
-            f'* Qualité de support : {q_support}\n'
-            f'* nom du fichier : {nom_fichier}\n'
-            f'* moa : {moa}\n'
-            f'* id source : {id_source}\n'
-            f'* exploitant : {exploitant}\n'
-            f'* fichiers shp : {shp_files}\n'
+            f"* aep : {'non' if aep == '' else 'oui'}\n"
+            f"* eu : {'non' if eu == '' else 'oui'}\n"
+            f"* epl : {'non' if epl == '' else 'oui'}\n"
+            f"* cote : {'non' if cote == '' else 'oui'}\n"
+            f"* utilisat : {utilisat}\n"
+            f"* no_origine : {'Données vides' if no_origine == '' else no_origine}\n"
+            f"* localisat : {'localisat non renseigné' if localisat == '' else localisat}\n"
+            f"* date de plan : {date_str}\n"
+            f"* type de plan : {'type de plan non renseigné' if type_plan == '' else type_plan}\n"
+            f"* bureau d\'étude : {'bureau d\'étude non renseigné' if b_etude == '' else b_etude}\n"
+            f"* entreprise {entreprise}\n"
+            f"* échelle : {'échelle non renseigné' if echelle == '' else echelle}\n"
+            f"* etat : {etat}\n"
+            f"* Qualité de support : {q_support}\n"
+            f"* nom du fichier : {nom_fichier}\n"
+            f"* moa : {moa}\n"
+            f"* id source : {id_source}\n"
+            f"* exploitant : {exploitant}\n"
+            f"* fichiers shp : {shp_files}\n"
         )
         self.log_to_console(text)
 
