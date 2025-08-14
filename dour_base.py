@@ -4,6 +4,7 @@ from qgis.PyQt.QtCore import QSettings, QTimer, Qt
 import os
 import time
 from .dour_base_dialog import DourBaseDialog
+from .theme import DarkTheme, LightTheme
 s = QSettings()
 
 class DourBase:
@@ -33,6 +34,7 @@ class DourBase:
             s.setValue("DourBase/is_first_start", "True")
             # Afficher la bannière pendant 5 secondes
             banner_dialog = QDialog(self.iface.mainWindow())
+            DarkTheme.apply(banner_dialog)
             banner_dialog.setWindowFlags(banner_dialog.windowFlags() | Qt.FramelessWindowHint)
             layout = QVBoxLayout()
             label = QLabel()
@@ -51,6 +53,13 @@ class DourBase:
             del self.dialog
             self.dialog = None
         self.dialog = DourBaseDialog()
+        settings = QSettings()
+        theme = settings.value("DourBase/theme", "light")
+        if theme == "light":
+            LightTheme.apply(self.dialog)
+        else:
+            DarkTheme.apply(self.dialog)
+            
         self.dialog.resize(400, 600)
         self.dialog.show()
         self.dialog.raise_()

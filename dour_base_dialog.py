@@ -13,9 +13,8 @@ import qgis
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QLineEdit, QLabel, QCheckBox, QComboBox, QHBoxLayout, QPushButton, QMessageBox,
     QDateEdit, QScrollArea, QWidget, QFileDialog, QInputDialog, QTabWidget, QSpacerItem, QSizePolicy,
-    QFormLayout, QDialogButtonBox, QGroupBox, QTextEdit
+    QFormLayout, QDialogButtonBox, QGroupBox, QTextEdit, QFrame
 )
-
 from qgis.PyQt.QtCore import QDate, QSettings, Qt, QSize, QCoreApplication
 from qgis.PyQt.QtGui import QPalette, QColor, QIcon, QPixmap, QIntValidator
 
@@ -468,7 +467,38 @@ class DourBaseDialog(QDialog):
         self.param_layout = QVBoxLayout(self.param_widget)
         self.param_layout.setAlignment(Qt.AlignTop)
 
-        # Label
+        # Section Thème
+        self.param_layout.addWidget(QLabel("<b>Thème de l'interface :</b>"))
+        
+        # Sélecteur de thème
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItem("Clair", "light")
+        self.theme_combo.addItem("Sombre", "dark")
+        
+        # Charger le thème actuel
+        settings = QSettings()
+        current_theme = settings.value("DourBase/theme", "light")
+        index = self.theme_combo.findData(current_theme)
+        if index >= 0:
+            self.theme_combo.setCurrentIndex(index)
+            
+        self.theme_combo.currentIndexChanged.connect(self.change_theme)
+        
+        theme_layout = QHBoxLayout()
+        theme_layout.addWidget(QLabel("Apparence :"))
+        theme_layout.addWidget(self.theme_combo)
+        self.param_layout.addLayout(theme_layout)
+        
+        # Séparateur
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        self.param_layout.addWidget(separator)
+        
+        # Section Dossiers
+        self.param_layout.addWidget(QLabel("<b>Dossiers de configuration :</b>"))
+        
+        # Label et champ pour le chemin des CSV
         label = QLabel("Chemin actuel :")
         self.param_layout.addWidget(label)
 
@@ -495,8 +525,13 @@ class DourBaseDialog(QDialog):
 
         # Mets à jour l’affichage du chemin
         self.update_dir_path_display()
+        
+        # Ajout d'un espacement
+        self.param_layout.addSpacing(20)
+        
+        # Lien vers les issues GitHub
         label = QLabel(
-            'Pour tout bug, erreur, question ou autre, n\'hésitez pas à ouvrir une issue sur le repo github du plugin : '
+            'Pour tout bug, erreur, question ou autre, n\'hésitez pas à ouvrir une issue sur le repo GitHub du plugin : '
             '<a href="https://github.com/SIG-CLCL/DourBase/issues">https://github.com/SIG-CLCL/DourBase/issues</a>'
         )
         label.setTextFormat(Qt.RichText)
@@ -718,6 +753,19 @@ class DourBaseDialog(QDialog):
         s.setValue("DourBase/csv_dir", "%INTERNAL%")
         self.update_dir_path_display()
         QMessageBox.information(self, "Succès", "Dossier réinitialisé avec succès.\nLes modifications prendront effet après un redémarrage")
+
+    def change_theme(self):
+        """Change le thème de l'application en fonction de la sélection"""
+        theme = self.theme_combo.currentData()
+        settings = QSettings()
+        settings.setValue("DourBase/theme", theme)
+        
+        # Appliquer le thème à la fenêtre principale
+        from .theme import LightTheme, DarkTheme
+        if theme == "light":
+            LightTheme.apply(self)
+        else:
+            DarkTheme.apply(self)
 
     def update_dir_path_display(self):
         dir_path = s.value("DourBase/csv_dir", "%INTERNAL%")
