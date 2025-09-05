@@ -819,6 +819,7 @@ class DourBaseDialog(QDialog):
             params["schema"] = self._database_schema
         else:
             schemas = get_shamas(params["host"], params["port"], params["dbname"], params["user"], params['password'])
+            schemas.sort()
             schema, ok = QInputDialog.getItem(
                 self, "Schema",
                 "Veuillez sélectionner le schéma désiré :",
@@ -1445,6 +1446,7 @@ class DourBaseDialog(QDialog):
                 schemas = get_shamas(db_consultation["host"], db_consultation["port"], db_consultation["dbname"],
                                      self.db_username.text(),
                                      self.db_password.text())
+                schemas.sort()
                 self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
                 self.log_to_console(f"[INFO] Affichage de la popup de sélection du schéma")
                 schema, ok = QInputDialog.getItem(self, "Schema",
@@ -1464,6 +1466,7 @@ class DourBaseDialog(QDialog):
                 schemas = get_shamas(db_work["host"], db_work["port"], db_work["dbname"],
                                      self.db_username.text(),
                                      self.db_password.text())
+                schemas.sort()
                 self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
                 self.log_to_console(f"[INFO] Affichage de la popup de sélection du schéma")
                 schema, ok = QInputDialog.getItem(self, "Schema",
