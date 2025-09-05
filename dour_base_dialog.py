@@ -188,7 +188,7 @@ class DourBaseDialog(QDialog):
         self.content_layout.addWidget(QLabel("Commune (DEPCO) :"))
         combo_depco_layout = QHBoxLayout()
         combo_depco_layout.addWidget(self.combo_depco)
-        combo_depco_layout.addWidget(help_icon_widget("Code INSEE,\nCelui-ci sera ajouté à BASEDOC et sera écrasé dans les données des récolements."))
+        combo_depco_layout.addWidget(help_icon_widget("Code INSEE,\nCelui-ci sera ajouté à BASEDOC"))
         self.content_layout.addLayout(combo_depco_layout)
 
         self.content_layout.addWidget(QLabel("Type de réseau"))
