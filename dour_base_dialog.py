@@ -172,7 +172,8 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(db_layout)
 
         self.combo_exploitant = QComboBox()
-        for opt in open_config("EXPLOITANT.csv", "config"):
+        options = sorted(open_config("EXPLOITANT.csv", "config"), key=lambda x: x[0].lower())
+        for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_exploitant.addItem(f"{opt[0]} ({opt[1]})",  opt[1])
         self.content_layout.addWidget(QLabel("Exploitant :"))
@@ -182,7 +183,8 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(combo_exploitant_layout)
 
         self.combo_depco = QComboBox()
-        for opt in open_config("DEPCO.csv", "config"):
+        options = sorted(open_config("DEPCO.csv", "config"), key=lambda x: x[0].lower())
+        for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_depco.addItem(f"{opt[0]} ({opt[1]})", (opt[0], opt[1]))
         self.content_layout.addWidget(QLabel("Commune (DEPCO) :"))
@@ -233,7 +235,8 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(b_etude_edit_layout)
 
         self.combo_entreprise = QComboBox()
-        for opt in open_config("ENTREPRISE.csv", "config"):
+        options = sorted(open_config("ENTREPRISE.csv", "config"), key=lambda x: x[0].lower())
+        for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_entreprise.addItem(f"{opt[0]} ({opt[1]})", (opt[0], opt[1]))
         self.content_layout.addWidget(QLabel("Entreprise :"))
@@ -270,7 +273,8 @@ class DourBaseDialog(QDialog):
         self.cote.setChecked(True)
 
         self.combo_etat = QComboBox()
-        for opt in open_config("ETAT.csv", "config"):
+        options = sorted(open_config("ETAT.csv", "config"), key=lambda x: x[0].lower())
+        for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_etat.addItem(f"{opt[0]} ({opt[0]})", (opt[0], opt[0]))
         self.content_layout.addWidget(QLabel("Type de support :"))
@@ -280,7 +284,8 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(combo_etat_layout)
 
         self.combo_support = QComboBox()
-        for opt in open_config("Q_SUPPORT.csv", "config"):
+        options = sorted(open_config("Q_SUPPORT.csv", "config"), key=lambda x: x[0].lower())
+        for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_support.addItem(f"{opt[0]} ({opt[0]})", (opt[0], opt[0]))
         self.content_layout.addWidget(QLabel("Qualité du support :"))
@@ -298,7 +303,8 @@ class DourBaseDialog(QDialog):
         self.utilisat.setChecked(False)
 
         self.combo_moa = QComboBox()
-        for opt in open_config("MOA.csv", "config"):
+        options = sorted(open_config("MOA.csv", "config"), key=lambda x: x[0].lower())
+        for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_moa.addItem(f"{opt[0]} ({opt[1]})", opt[1])
         self.content_layout.addWidget(QLabel("MOA :"))
