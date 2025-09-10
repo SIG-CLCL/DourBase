@@ -22,22 +22,93 @@ from osgeo import ogr
 import psycopg2
 from qgis.core import QgsSettings, QgsDataSourceUri, QgsVectorLayer
 from .utils import update_file_name, open_config, check_shapefile_completeness, get_shamas, \
-    get_filename_without_extension, get_suffix_after_last_underscore, main_prepare_shapefiles
+    get_filename_without_extension, get_suffix_after_last_underscore, main_prepare_shapefiles, get_param
 
 s = QSettings()
 # s.setValue("plugin/key", "value")
 # valeur = s.value("plugin/key", "def_value")
 
-def save_logs(console_logs, parent=None):
-    filename, _ = QFileDialog.getSaveFileName(
-        parent,
-        "Sauvegarder les logs",
-        "",
-        "Fichiers texte (*.txt)"
-    )
-    if filename:
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write("Compte rendu du traitement :\n\n" + console_logs)
+def save_logs(console_logs, parent=None, import_dir=None):
+    """
+    Sauvegarde les logs selon le mode configuré :
+    1: Enregistrement automatique dans le dossier d'import
+    2: Propose d'enregistrer les logs (comportement par défaut)
+    3: Pas de logs
+    
+    Args:
+        console_logs (str): Contenu des logs à enregistrer
+        parent (QWidget, optional): Widget parent pour les boîtes de dialogue
+        import_dir (str, optional): Dossier d'import pour l'enregistrement automatique
+    
+    Returns:
+        str or None: Chemin du fichier de log ou None si non enregistré
+    """
+    try:
+        # Récupération du paramètre avec get_param et gestion des erreurs
+        log_setting = get_param("logs")
+        log_setting = int(log_setting) if log_setting is not None else 2
+    except (ValueError, TypeError):
+        log_setting = 2  # Valeur par défaut en cas d'erreur
+    
+    if log_setting == 3:  # Pas de logs
+        return None
+    
+    # S'assurer que les logs ne sont pas vides
+    if not console_logs or not isinstance(console_logs, str):
+        logging.warning("Aucun contenu à logger")
+        return None
+    
+    # Mode 1: Enregistrement automatique
+    if log_setting == 1:
+        if not import_dir or not os.path.isdir(import_dir):
+            logging.warning(f"Dossier d'import invalide pour les logs: {import_dir}")
+            return None
+            
+        try:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(import_dir, f"logs_{timestamp}.txt")
+            
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write("Compte rendu du traitement :\n\n" + console_logs)
+            
+            logging.info(f"Logs enregistrés automatiquement dans : {filename}")
+            return filename
+            
+        except Exception as e:
+            logging.error(f"Erreur lors de l'enregistrement automatique des logs: {str(e)}")
+            # Fallback au mode proposition si échec
+            log_setting = 2
+    
+    # Mode 2: Proposition d'enregistrement
+    if log_setting == 2:
+        try:
+            filename, _ = QFileDialog.getSaveFileName(
+                parent,
+                "Sauvegarder les logs",
+                "",
+                "Fichiers texte (*.txt)"
+            )
+            
+            if filename:
+                if not filename.lower().endswith('.txt'):
+                    filename += '.txt'
+                    
+                with open(filename, "w", encoding="utf-8") as f:
+                    f.write("Compte rendu du traitement :\n\n" + console_logs)
+                
+                logging.info(f"Logs enregistrés dans : {filename}")
+                return filename
+                
+        except Exception as e:
+            logging.error(f"Erreur lors de l'enregistrement manuel des logs: {str(e)}")
+            if parent:
+                QMessageBox.critical(
+                    parent,
+                    "Erreur",
+                    f"Impossible d'enregistrer les logs : {str(e)}"
+                )
+    
+    return None
 
 class MessagesBoxes:
     def __init__(self, type):
@@ -67,27 +138,45 @@ class MessagesBoxes:
         msg.setIconPixmap(QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)),"error.svg")))
         msg.exec_()
 
-    def succes(self, title, message, savelog:bool, console_logs=None):
+    def succes(self, title, message, savelog:bool, console_logs=None, folder=None):
+        """
+        Affiche un message de succès avec gestion des logs
+        
+        Args:
+            title (str): Titre de la boîte de dialogue
+            message (str): Message à afficher
+            savelog (bool): Si True, active la gestion des logs
+            console_logs (str, optional): Contenu des logs à sauvegarder
+            folder (str, optional): Dossier pour l'enregistrement automatique
+        """
         if savelog and console_logs is None:
-            raise Exception("When savelog is True, console_logs can't be None.")
+            raise ValueError("When savelog is True, console_logs can't be None.")
+            
         msg = QMessageBox(self)
         msg.setWindowTitle(title)
+        
+        # Gestion des logs si demandé
         if savelog:
-            if console_logs is not None:
-                console_logs = (
-                    "========== Console output ==========\n\n"
-                    f"{console_logs}"
+            log_param = int(get_param("logs") or "2")
+            
+            if log_param == 1:
+                save_logs(
+                    console_logs=console_logs,
+                    parent=self,
+                    import_dir=folder if folder is not None else (self.FOLDER if hasattr(self, 'FOLDER') else None)
                 )
-
-            msg.setText(f"{message}")
-            save_button = QPushButton("Sauvegarder les logs")
-            save_button.clicked.connect(lambda: save_logs(console_logs, parent=self))
-            msg.addButton(save_button, QMessageBox.ActionRole)
-        else:
-
-            msg.setText(message)
+            elif log_param == 2:
+                save_button = QPushButton("Sauvegarder les logs")
+                save_button.clicked.connect(lambda: save_logs(
+                    console_logs=console_logs,
+                    parent=self,
+                    import_dir=folder if folder is not None else (self.FOLDER if hasattr(self, 'FOLDER') else None)
+                ))
+                msg.addButton(save_button, QMessageBox.ActionRole)
+            
+        msg.setText(message)
         msg.addButton(QMessageBox.Ok)
-        msg.setIconPixmap(QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)),"succes.svg")))
+        msg.setIconPixmap(QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)), "succes.svg")))
         msg.exec_()
 
 class LoginDialog(QDialog):
@@ -122,6 +211,11 @@ def help_icon_widget(tooltip_text):
     return label
 
 class DourBaseDialog(QDialog):
+    def save_log_setting(self):
+        """Sauvegarde le paramètre de log sélectionné"""
+        log_setting = self.log_combo.currentData()
+        s.setValue("DourBase/logs", str(log_setting))
+        
     def __init__(self, parent=None):
         super().__init__(parent)
         self.backup_consultation_path = None
@@ -172,7 +266,7 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(db_layout)
 
         self.combo_exploitant = QComboBox()
-        options = sorted(open_config("EXPLOITANT.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("EXPLOITANT.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_exploitant.addItem(f"{opt[0]} ({opt[1]})",  opt[1])
@@ -183,7 +277,7 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(combo_exploitant_layout)
 
         self.combo_depco = QComboBox()
-        options = sorted(open_config("DEPCO.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("DEPCO.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_depco.addItem(f"{opt[0]} ({opt[1]})", (opt[0], opt[1]))
@@ -235,7 +329,7 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(b_etude_edit_layout)
 
         self.combo_entreprise = QComboBox()
-        options = sorted(open_config("ENTREPRISE.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("ENTREPRISE.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_entreprise.addItem(f"{opt[0]} ({opt[1]})", (opt[0], opt[1]))
@@ -273,7 +367,7 @@ class DourBaseDialog(QDialog):
         self.cote.setChecked(True)
 
         self.combo_etat = QComboBox()
-        options = sorted(open_config("ETAT.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("ETAT.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_etat.addItem(f"{opt[0]} ({opt[0]})", (opt[0], opt[0]))
@@ -284,7 +378,7 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(combo_etat_layout)
 
         self.combo_support = QComboBox()
-        options = sorted(open_config("Q_SUPPORT.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("Q_SUPPORT.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_support.addItem(f"{opt[0]} ({opt[0]})", (opt[0], opt[0]))
@@ -303,7 +397,7 @@ class DourBaseDialog(QDialog):
         self.utilisat.setChecked(False)
 
         self.combo_moa = QComboBox()
-        options = sorted(open_config("MOA.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("MOA.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_moa.addItem(f"{opt[0]} ({opt[1]})", opt[1])
@@ -315,7 +409,7 @@ class DourBaseDialog(QDialog):
 
         # File name
         self.file_name_edit = QLineEdit(self)
-        self.file_name_edit.setReadOnly(False) # On propose à l'utilisateur le nom généré par défaut, mais il doit pouvoir le changer.
+        self.file_name_edit.setReadOnly(False)
         self.content_layout.addWidget(QLabel("Nom de fichier généré :"))
         file_name_edit_layout = QHBoxLayout()
         file_name_edit_layout.addWidget(self.file_name_edit)
@@ -526,6 +620,30 @@ class DourBaseDialog(QDialog):
         self.reset_csv_config_dir_button.clicked.connect(self.reset_csv_config_dir)
         self.param_layout.addWidget(self.reset_csv_config_dir_button)
 
+        # Séparateur
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        self.param_layout.addWidget(separator)
+
+        # Section Logs
+        self.options_de_journalisation = (QLabel("<b>Options de journalisation</b>"))
+        self.param_layout.addWidget(self.options_de_journalisation)
+        self.log_combo = QComboBox()
+        self.log_combo.addItem("1 - Enregistrement automatique des logs", 1)
+        self.log_combo.addItem("2 - Proposer d'enregistrer les logs", 2)
+        self.log_combo.addItem("3 - Désactiver les logs", 3)
+        
+        # Charger la valeur sauvegardée ou utiliser 2 par défaut
+        saved_log_setting = int(s.value("DourBase/logs", "2"))
+        index = self.log_combo.findData(saved_log_setting)
+        if index >= 0:
+            self.log_combo.setCurrentIndex(index)
+            
+        self.log_combo.currentIndexChanged.connect(self.save_log_setting)
+        self.param_layout.addWidget(QLabel("Comportement des logs :"))
+        self.param_layout.addWidget(self.log_combo)
+        
         # Ajoute un espace extensible en bas pour forcer l'alignement en haut
         self.param_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
@@ -976,22 +1094,36 @@ class DourBaseDialog(QDialog):
             "========== Console output ==========\n\n"
             f"{self.console_textedit.toPlainText()}"
         )
+
         msg = QMessageBox(self)
         msg.setWindowTitle("Insertion réussie dans la base !")
         msg.setText("Compte rendu du traitement :\n\n" + summary)
-        save_button = QPushButton("Sauvegarder les logs")
-        msg.addButton(save_button, QMessageBox.ActionRole)
+
+        # Préparation des logs complets
+        full_logs = "Compte rendu du traitement :\n\n" + summary + "\nDétails :\n" + "\n".join(self.report.get("logs", []))
+        if hasattr(self, 'console_textedit'):
+            full_logs += console_logs
+        
+        # Gestion des logs avec save_logs qui gère déjà tous les cas
+        log_param = int(get_param("logs") or "2")
+        
+        if log_param == 1:  # Enregistrement automatique
+            save_logs(
+                console_logs=full_logs,
+                parent=self,
+                import_dir=self.FOLDER if hasattr(self, 'FOLDER') else None
+            )
+        elif log_param == 2:
+            save_button = QPushButton("Sauvegarder les logs")
+            save_button.clicked.connect(lambda: save_logs(
+                console_logs=full_logs,
+                parent=self,
+                import_dir=self.FOLDER if hasattr(self, 'FOLDER') else None
+            ))
+            msg.addButton(save_button, QMessageBox.ActionRole)
+
         msg.addButton(QMessageBox.Ok)
 
-        def save_logs():
-            filename, _ = QFileDialog.getSaveFileName(self, "Sauvegarder les logs", "", "Fichiers texte (*.txt)")
-            if filename:
-                with open(filename, "w", encoding="utf-8") as f:
-                    f.write("Compte rendu du traitement :\n\n" + summary + "\nDétails :\n")
-                    f.write("\n".join(self.report["logs"]))
-                    f.write(console_logs)
-
-        save_button.clicked.connect(save_logs)
         msg.exec_()
         self.tabs.removeTab(4)
 
@@ -1491,12 +1623,17 @@ class DourBaseDialog(QDialog):
         password = self.db_password.text()
         username = self.db_username.text()
         backup_postgis_path = self.backup_postgis_path
-        self.log_to_console(
+        message = (
             f"[INFO] Rapport des données avant le lancement :\n"
             f"* db_consultation_backup_path : {db_consultation_backup_path}\n"
             f"* password : {password}\n"
             f"* username : {username}\n"
             f"* backup_postgis_path : {backup_postgis_path}")
+        message = message.replace(
+            f"* password : {password}",
+            "* password : [PASSWORD HIDDEN FOR SECURITY REASONS]"
+        )
+        self.log_to_console(message)
         batch_content = f"""
         @echo off
         set PGPASSWORD={password}
@@ -1624,7 +1761,7 @@ class DourBaseDialog(QDialog):
             MessagesBoxes.error(self, "Erreur", f"Erreur lors du déploiement : {e}", savelog=True,
                                 console_logs=self.console_textedit.toPlainText())
         finally:
-            MessagesBoxes.succes(self, "Information", "Déploiement terminé.", savelog=True, console_logs=self.console_textedit.toPlainText())
+            MessagesBoxes.succes(self, "Information", "Déploiement terminé.", savelog=True, console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
         # continuer la boucle de manière dégueu, mais bon faute de meilleur idée...
         # le but est de ne pas terminer le processus, on attends un certain nombre de secondes pour après fermer l'onglet console. Cela dis, ça ne sera pas super fluide, étant donné que l'interface sera mise à jour toute les 0.1 secondes.
         for item in range(1000):

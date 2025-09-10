@@ -17,6 +17,10 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+def get_param(param_name):
+    s = QSettings()
+    return s.value(f"DourBase/{param_name}")
+
 def update_file_name(depco, num_source, aep=False, eu=False, epl=False):
     if not aep and not eu and not epl:
         raise ValueError("At least one argument (aep/eu/epl) should be True.")
