@@ -524,7 +524,7 @@ class DourBaseDialog(QDialog):
         self.db_password.textChanged.connect(self.update_deploy_button_state)
         self.deploy_layout.addWidget(self.db_password)
 
-        self.backup_postgis_path_label = QLabel("Le dossier sélectionné pour la sauvegarde PostGIS apparaîtra ici.")
+        self.backup_postgis_path_label = QLabel("Sélectionner le dossier de sauvegarde de la base de données de travail.")
         self.deploy_layout.addWidget(self.backup_postgis_path_label)
 
         self.backup_postgis_path_button = QPushButton("Select Directory")
@@ -532,7 +532,7 @@ class DourBaseDialog(QDialog):
         self.backup_postgis_path_button.clicked.connect(self.select_directory_postgis)
         self.deploy_layout.addWidget(self.backup_postgis_path_button)
 
-        self.backup_consultation_path_label = QLabel("Le dossier sélectionné pour la sauvegarde PostGIS apparaîtra ici.")
+        self.backup_consultation_path_label = QLabel("Sélectionner le dossier de sauvegarde de la base de données de consultation.")
         self.deploy_layout.addWidget(self.backup_consultation_path_label)
 
         self.backup_consultation_path_button = QPushButton("Select Directory")
