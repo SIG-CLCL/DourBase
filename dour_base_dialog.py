@@ -219,7 +219,7 @@ class DourBaseDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.backup_consultation_path = None
-        self.backup_postgis_path = None
+        self.backup_travail_path = None
         self.FOLDER = ''
         self._database_password = ""
         self._database_schema = ""
@@ -524,13 +524,13 @@ class DourBaseDialog(QDialog):
         self.db_password.textChanged.connect(self.update_deploy_button_state)
         self.deploy_layout.addWidget(self.db_password)
 
-        self.backup_postgis_path_label = QLabel("Sélectionner le dossier de sauvegarde de la base de données de travail.")
-        self.deploy_layout.addWidget(self.backup_postgis_path_label)
+        self.backup_travail_path_label = QLabel("Sélectionner le dossier de sauvegarde de la base de données de travail.")
+        self.deploy_layout.addWidget(self.backup_travail_path_label)
 
-        self.backup_postgis_path_button = QPushButton("Select Directory")
+        self.backup_travail_path_button = QPushButton("Select Directory")
 
-        self.backup_postgis_path_button.clicked.connect(self.select_directory_postgis)
-        self.deploy_layout.addWidget(self.backup_postgis_path_button)
+        self.backup_travail_path_button.clicked.connect(self.select_directory_postgis)
+        self.deploy_layout.addWidget(self.backup_travail_path_button)
 
         self.backup_consultation_path_label = QLabel("Sélectionner le dossier de sauvegarde de la base de données de consultation.")
         self.deploy_layout.addWidget(self.backup_consultation_path_label)
@@ -778,7 +778,7 @@ class DourBaseDialog(QDialog):
         dir_path = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
 
         if dir_path:
-            self.backup_consultation_path_label.setText(f"Dossier sélectionné pour la sauvegarde PostGIS :\n{dir_path}")
+            self.backup_consultation_path_label.setText(f"Dossier sélectionné pour la sauvegarde de la base de données de consultation :\n{dir_path}")
             self.backup_consultation_path = dir_path
             self.update_deploy_button_state()
 
@@ -786,8 +786,8 @@ class DourBaseDialog(QDialog):
         dir_path = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
 
         if dir_path:
-            self.backup_postgis_path_label.setText(f"Dossier sélectionné pour la sauvegarde PostGIS :\n{dir_path}")
-            self.backup_postgis_path = dir_path
+            self.backup_travail_path_label.setText(f"Dossier sélectionné pour la sauvegarde de la base de données de travail :\n{dir_path}")
+            self.backup_travail_path = dir_path
             self.update_deploy_button_state()
 
     def update_deploy_button_state(self):
@@ -803,10 +803,10 @@ class DourBaseDialog(QDialog):
         self.db_conflict_label.setVisible(conflict)
         
         # 3. Vérifier que les dossiers de backup sont sélectionnés
-        backup_postgis_text = self.backup_postgis_path_label.text()
+        backup_travail_text = self.backup_travail_path_label.text()
         backup_consultation_text = self.backup_consultation_path_label.text()
         backup_default_text = "Le dossier sélectionné pour la sauvegarde PostGIS apparaîtra ici."
-        backup_path_postgis_valid = backup_postgis_text != backup_default_text and hasattr(self, 'backup_postgis_path')
+        backup_path_postgis_valid = backup_travail_text != backup_default_text and hasattr(self, 'backup_travail_path')
         backup_path_consultation_valid = backup_consultation_text != backup_default_text and hasattr(self, 'backup_consultation_path')
         
         # Activer le bouton seulement si toutes les conditions sont remplies
@@ -1622,13 +1622,13 @@ class DourBaseDialog(QDialog):
         db_consultation_backup_path = self.backup_consultation_path
         password = self.db_password.text()
         username = self.db_username.text()
-        backup_postgis_path = self.backup_postgis_path
+        backup_travail_path = self.backup_travail_path
         message = (
             f"[INFO] Rapport des données avant le lancement :\n"
             f"* db_consultation_backup_path : {db_consultation_backup_path}\n"
             f"* password : {password}\n"
             f"* username : {username}\n"
-            f"* backup_postgis_path : {backup_postgis_path}")
+            f"* backup_travail_path : {backup_travail_path}")
         message = message.replace(
             f"* password : {password}",
             "* password : [PASSWORD HIDDEN FOR SECURITY REASONS]"
@@ -1638,7 +1638,7 @@ class DourBaseDialog(QDialog):
         @echo off
         set PGPASSWORD={password}
         pg_dump.exe -h {db_consultation['host']} -U {username} -d {db_consultation['dbname']} -p {db_consultation['port']} -n {db_consultation['schema']} -E UTF8 > "{db_consultation_backup_path}\\{db_consultation['schema']}_backup.sql"
-        pg_dump.exe -h {db_work['host']} -U {username} -d {db_work['dbname']} -p {db_work['port']} -n {db_work['schema']} -E UTF8 > "{backup_postgis_path}\\{db_work['schema']}.sql"
+        pg_dump.exe -h {db_work['host']} -U {username} -d {db_work['dbname']} -p {db_work['port']} -n {db_work['schema']} -E UTF8 > "{backup_travail_path}\\{db_work['schema']}.sql"
         """
         safe_batch_content = batch_content.replace(
             f"set PGPASSWORD={password}",
@@ -1688,7 +1688,7 @@ class DourBaseDialog(QDialog):
             batch_content = f"""
             @echo off
             set PGPASSWORD={password}
-            psql.exe -h {db_consultation['host']} -U {username} -d {db_consultation['dbname']} -p {db_consultation['port']} < "{backup_postgis_path}\\{db_consultation['schema']}.sql"
+            psql.exe -h {db_consultation['host']} -U {username} -d {db_consultation['dbname']} -p {db_consultation['port']} < "{backup_travail_path}\\{db_consultation['schema']}.sql"
             """
             conn = psycopg2.connect(
                 host=db_consultation["host"],
