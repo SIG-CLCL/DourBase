@@ -114,7 +114,7 @@ class MessagesBoxes:
     def __init__(self, type):
         super().__init__(type)
 
-    def error(self, title, message, savelog:bool, console_logs=None):
+    def error(self, title, message, savelog:bool, console_logs=None, folder=None):
         if savelog and console_logs is None:
             raise Exception("When savelog is True, console_logs can't be None.")
 
@@ -126,11 +126,18 @@ class MessagesBoxes:
                     "========== Console output ==========\n\n"
                     f"{console_logs}"
                 )
-
+            log_param = int(get_param("logs") or "2")
             msg.setText(f"{message}")
-            save_button = QPushButton("Sauvegarder les logs")
-            save_button.clicked.connect(lambda: save_logs(console_logs, parent=self))
-            msg.addButton(save_button, QMessageBox.ActionRole)
+            if log_param == 1:
+                save_logs(
+                    console_logs=console_logs,
+                    parent=self,
+                    import_dir=folder if folder is not None else (self.FOLDER if hasattr(self, 'FOLDER') else None)
+                )
+            elif log_param == 2:
+                save_button = QPushButton("Sauvegarder les logs")
+                save_button.clicked.connect(lambda: save_logs(console_logs, parent=self))
+                msg.addButton(save_button, QMessageBox.ActionRole)
         else:
 
             msg.setText(message)
@@ -779,6 +786,7 @@ class DourBaseDialog(QDialog):
 
         if dir_path:
             self.backup_consultation_path_label.setText(f"Dossier sélectionné pour la sauvegarde de la base de données de consultation :\n{dir_path}")
+            self.save_dir_path = dir_path
             self.backup_consultation_path = dir_path
             self.update_deploy_button_state()
 
@@ -1187,7 +1195,7 @@ class DourBaseDialog(QDialog):
             MessagesBoxes.error(self, "Erreur",
                                 f"Erreur lors de la récupération des fichiers :\n{e}\n\nAjout dans la base de données annulé.",
                                 savelog=True,
-                                console_logs=self.console_textedit.toPlainText())
+                                console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
             return
 
 
@@ -1516,7 +1524,7 @@ class DourBaseDialog(QDialog):
             # QMessageBox.critical(self, "Erreur", f"Erreur lors de l'insertion :\n{e}")
             MessagesBoxes.error(self, "Erreur", f"Erreur lors de l'insertion :\n{e}",
                                 savelog=True,
-                                console_logs=self.console_textedit.toPlainText())
+                                console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
 
     def run_deployment(self):
         global db_consultation, db_work
@@ -1668,7 +1676,7 @@ class DourBaseDialog(QDialog):
             #                         f"Sortie standard : {e.stdout}\nErreur standard : {e.stderr}")
             MessagesBoxes.error(self, "Erreur", f"Sortie standard : {e.stdout}\nErreur standard : {e.stderr}",
                                 savelog=True,
-                                console_logs=self.console_textedit.toPlainText())
+                                console_logs=self.console_textedit.toPlainText(), folder=self.save_dir_path)
             self.log_to_console(f"[ERROR] Erreur lors de l'exécution du batch : Sortie standard : {e.stdout}\nErreur standard : {e.stderr}")
             print("Erreur lors de l'exécution du batch :")
             print("Sortie standard :", e.stdout)
@@ -1759,9 +1767,9 @@ class DourBaseDialog(QDialog):
             self.log_to_console(f"[INFO] Connection closed.")
         except Exception as e:
             MessagesBoxes.error(self, "Erreur", f"Erreur lors du déploiement : {e}", savelog=True,
-                                console_logs=self.console_textedit.toPlainText())
+                                console_logs=self.console_textedit.toPlainText(), folder=self.save_dir_path)
         finally:
-            MessagesBoxes.succes(self, "Information", "Déploiement terminé.", savelog=True, console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
+            MessagesBoxes.succes(self, "Information", "Déploiement terminé.", savelog=True, console_logs=self.console_textedit.toPlainText(), folder=self.save_dir_path)
         # continuer la boucle de manière dégueu, mais bon faute de meilleur idée...
         # le but est de ne pas terminer le processus, on attends un certain nombre de secondes pour après fermer l'onglet console. Cela dis, ça ne sera pas super fluide, étant donné que l'interface sera mise à jour toute les 0.1 secondes.
         for item in range(1000):
