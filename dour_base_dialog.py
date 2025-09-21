@@ -313,7 +313,7 @@ class DourBaseDialog(QDialog):
 
         self.localisat_edit = QLineEdit(self)
         self.localisat_edit.setPlaceholderText("Rue des...")
-        self.content_layout.addWidget(QLabel("Localisat :"))
+        self.content_layout.addWidget(QLabel("Localisation :"))
         localisat_edit_layout = QHBoxLayout()
         localisat_edit_layout.addWidget(self.localisat_edit)
         localisat_edit_layout.addWidget(help_icon_widget("La localisation du plan sera ajoutée à BASEDOC"))
@@ -321,7 +321,7 @@ class DourBaseDialog(QDialog):
 
         self.plan_type_edit = QLineEdit(self)
         self.plan_type_edit.setPlaceholderText("Plan de récolement")
-        self.content_layout.addWidget(QLabel("Type de plan"))
+        self.content_layout.addWidget(QLabel("Type de plan :"))
         combo_type_plan_layout = QHBoxLayout()
         combo_type_plan_layout.addWidget(self.plan_type_edit)
         combo_type_plan_layout.addWidget(help_icon_widget("Le type de plan sera ajoutée à BASEDOC"))
@@ -359,7 +359,7 @@ class DourBaseDialog(QDialog):
         self.echelle_edit = QLineEdit(self)
         self.echelle_edit.setPlaceholderText("échelle (ex : 200)")
         self.echelle_edit.setValidator(QIntValidator())
-        self.content_layout.addWidget(QLabel("echelle :"))
+        self.content_layout.addWidget(QLabel("Echelle :"))
         echelle_edit_layout = QHBoxLayout()
         echelle_edit_layout.addWidget(self.echelle_edit)
         echelle_edit_layout.addWidget(help_icon_widget("Celle-ci sera ajoutée à BASEDOC"))
