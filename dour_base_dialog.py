@@ -23,7 +23,7 @@ import psycopg2
 from qgis.core import QgsSettings, QgsDataSourceUri, QgsVectorLayer
 from .utils import update_file_name, open_config, check_shapefile_completeness, get_shamas, \
     get_filename_without_extension, get_suffix_after_last_underscore, main_prepare_shapefiles, get_param
-is_test_mode = True
+is_test_mode = False
 s = QSettings()
 # s.setValue("plugin/key", "value")
 # valeur = s.value("plugin/key", "def_value")
