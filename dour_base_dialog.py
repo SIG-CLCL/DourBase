@@ -1212,10 +1212,9 @@ class DourBaseDialog(QDialog):
         cote = 'Oui' if self.cote.isChecked() else 'Non'
         utilisat = 'Oui' if self.utilisat.isChecked() else 'Non'
         no_origine = ''
-        localisat = self.localisat_edit.text()
-        localisat = localisat.replace("'", "''")
+        localisat = self.localisat_edit.text().replace("'", "''")
         date_qdate = self.date_plan_edit.date()
-        type_plan = self.plan_type_edit.text()
+        type_plan = self.plan_type_edit.text().replace("'", "''")
         date_str = date_qdate.toString("yyyy-MM-dd")
         b_etude = self.b_etude_edit.text()
         entreprise = self.combo_entreprise.currentData()
