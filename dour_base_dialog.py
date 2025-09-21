@@ -1122,7 +1122,7 @@ class DourBaseDialog(QDialog):
             save_logs(
                 console_logs=full_logs,
                 parent=self,
-                import_dir=self.FOLDER if hasattr(self, 'FOLDER') else None
+                import_dir=self.FOLDER
             )
         elif log_param == 2:
             save_button = QPushButton("Sauvegarder les logs")
