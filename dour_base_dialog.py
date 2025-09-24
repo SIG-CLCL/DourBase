@@ -1205,8 +1205,8 @@ class DourBaseDialog(QDialog):
 
             self.auteur = self.b_etude_edit.text()
             convert_dir = main_prepare_shapefiles(self.FOLDER)
-            self.FOLDER = convert_dir
-            self.SHP = os.path.join(self.FOLDER, '*.shp')
+            self.NEW_FOLDER = convert_dir
+            self.SHP = os.path.join(self.NEW_FOLDER, '*.shp')
             depco = self.combo_depco.currentData()
             depco = depco[1]
             num_source = self.num_source_edit.text()
