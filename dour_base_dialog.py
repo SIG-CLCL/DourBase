@@ -1185,7 +1185,20 @@ class DourBaseDialog(QDialog):
         self.add_console_tab()
         self.log_to_console("[INFO] Run_sql called")
         if not is_test_mode:
-            database = self.get_selected_db_params()
+            try:
+                database = self.get_selected_db_params()
+            except Exception as e:
+                if "authentication failed" in str(e).lower():
+                    self.log_to_console("[WARNING] Authentification failed")
+                    QMessageBox.critical(self, "Erreur d'authentification", 
+                                          "Échec de l'authentification.\nVeuillez vérifier votre nom d'utilisateur et votre mot de passe.")
+                    self.run_sql()
+                    return
+                else:
+                    self.log_to_console(f"[ERROR] Error getting database params: {e}")
+                    MessagesBoxes.error(self, "Erreur de connexion", 
+                                        f"Impossible de se connecter à la base de données. Erreur: {e}",savelog=True,console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
+                    return
             if database is None:
                 print("[WARNING] Database is none. Aborting")
                 self.log_to_console("[WARNING] Database is none. Aborting")
@@ -1288,14 +1301,27 @@ class DourBaseDialog(QDialog):
                         f"[ERROR] Aucun mot de passe PostgreSQL fourni, connexion annulée.")
                     return
 
-                conn = psycopg2.connect(
-                    host=database["host"],
-                    dbname=database["dbname"],
-                    user=database["user"],
-                    password=database["password"],
-                    port=database["port"]
-                )
-                cursor = conn.cursor()
+                try:
+                    conn = psycopg2.connect(
+                        host=database["host"],
+                        dbname=database["dbname"],
+                        user=database["user"],
+                        password=database["password"],
+                        port=database["port"]
+                    )
+                    cursor = conn.cursor()
+                except Exception as e:
+                    error_message = str(e)
+                    if "authentication failed" in error_message.lower():
+                        QMessageBox.critical(self, "Erreur d'authentification", 
+                                          "Échec de l'authentification.\nVeuillez vérifier votre nom d'utilisateur et votre mot de passe.")
+                        self.log_to_console("[WARNING] Authentification failed")
+                        self.run_sql()
+                    else:
+                        QMessageBox.critical(self, "Erreur de connexion", 
+                                          f"Impossible de se connecter à la base de données.\nErreur: {error_message}")
+                        self.log_to_console(f"[ERROR] Error connecting to the database: {error_message}")
+                    return
 
                 cursor.execute(
                     f"SELECT 1 FROM {database['schema']}.basedoc WHERE id_source = %s",
@@ -1607,9 +1633,22 @@ class DourBaseDialog(QDialog):
 
                 if db == "db_consultation":
                     db_consultation = db_dict
-                    schemas = get_shamas(db_consultation["host"], db_consultation["port"], db_consultation["dbname"],
-                                        self.db_username.text(),
-                                        self.db_password.text())
+                    try:
+                        schemas = get_shamas(db_consultation["host"], db_consultation["port"], db_consultation["dbname"],
+                                            self.db_username.text(),
+                                            self.db_password.text())
+                    except Exception as e:
+                        if "authentication failed" in str(e).lower():
+                            self.log_to_console("[WARNING] Authentification failed")
+                            QMessageBox.critical(self, "Erreur d'authentification", 
+                                                  "Échec de l'authentification.\nVeuillez vérifier votre nom d'utilisateur et votre mot de passe.")
+                            self.run_deployment()
+                            return
+                        else:
+                            self.log_to_console(f"[ERROR] Error getting schemas: {e}")
+                            MessagesBoxes.error(self, "Erreur de connexion", 
+                                                f"Impossible de se connecter à la base de données. Erreur: {e}",savelog=True,console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
+                            return
                     schemas.sort()
                     self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
                     self.log_to_console(f"[INFO] Affichage de la popup de sélection du schéma")
@@ -1627,9 +1666,22 @@ class DourBaseDialog(QDialog):
                         return
                 else:
                     db_work = db_dict
-                    schemas = get_shamas(db_work["host"], db_work["port"], db_work["dbname"],
+                    try:
+                        schemas = get_shamas(db_work["host"], db_work["port"], db_work["dbname"],
                                         self.db_username.text(),
                                         self.db_password.text())
+                    except Exception as e:
+                        if "authentication failed" in str(e).lower():
+                            self.log_to_console("[WARNING] Authentification failed")
+                            QMessageBox.critical(self, "Erreur d'authentification", 
+                                                  "Échec de l'authentification.\nVeuillez vérifier votre nom d'utilisateur et votre mot de passe.")
+                            self.run_deployment()
+                            return
+                        else:
+                            self.log_to_console(f"[ERROR] Error getting schemas: {e}")
+                            MessagesBoxes.error(self, "Erreur de connexion", 
+                                                f"Impossible de se connecter à la base de données. Erreur: {e}",savelog=True,console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
+                            return
                     schemas.sort()
                     self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
                     self.log_to_console(f"[INFO] Affichage de la popup de sélection du schéma")
