@@ -22,28 +22,99 @@ from osgeo import ogr
 import psycopg2
 from qgis.core import QgsSettings, QgsDataSourceUri, QgsVectorLayer
 from .utils import update_file_name, open_config, check_shapefile_completeness, get_shamas, \
-    get_filename_without_extension, get_suffix_after_last_underscore, main_prepare_shapefiles
-
+    get_filename_without_extension, get_suffix_after_last_underscore, main_prepare_shapefiles, get_param
+is_test_mode = False
 s = QSettings()
 # s.setValue("plugin/key", "value")
 # valeur = s.value("plugin/key", "def_value")
 
-def save_logs(console_logs, parent=None):
-    filename, _ = QFileDialog.getSaveFileName(
-        parent,
-        "Sauvegarder les logs",
-        "",
-        "Fichiers texte (*.txt)"
-    )
-    if filename:
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write("Compte rendu du traitement :\n\n" + console_logs)
+def save_logs(console_logs, parent=None, import_dir=None):
+    """
+    Sauvegarde les logs selon le mode configuré :
+    1: Enregistrement automatique dans le dossier d'import
+    2: Propose d'enregistrer les logs (comportement par défaut)
+    3: Pas de logs
+    
+    Args:
+        console_logs (str): Contenu des logs à enregistrer
+        parent (QWidget, optional): Widget parent pour les boîtes de dialogue
+        import_dir (str, optional): Dossier d'import pour l'enregistrement automatique
+    
+    Returns:
+        str or None: Chemin du fichier de log ou None si non enregistré
+    """
+    try:
+        # Récupération du paramètre avec get_param et gestion des erreurs
+        log_setting = get_param("logs")
+        log_setting = int(log_setting) if log_setting is not None else 2
+    except (ValueError, TypeError):
+        log_setting = 2  # Valeur par défaut en cas d'erreur
+    
+    if log_setting == 3:  # Pas de logs
+        return None
+    
+    # S'assurer que les logs ne sont pas vides
+    if not console_logs or not isinstance(console_logs, str):
+        logging.warning("Aucun contenu à logger")
+        return None
+    
+    # Mode 1: Enregistrement automatique
+    if log_setting == 1:
+        if not import_dir or not os.path.isdir(import_dir):
+            logging.warning(f"Dossier d'import invalide pour les logs: {import_dir}")
+            return None
+            
+        try:
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(import_dir, f"logs_{timestamp}.txt")
+            
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write("Compte rendu du traitement :\n\n" + console_logs)
+            
+            logging.info(f"Logs enregistrés automatiquement dans : {filename}")
+            return filename
+            
+        except Exception as e:
+            logging.error(f"Erreur lors de l'enregistrement automatique des logs: {str(e)}")
+            # Fallback au mode proposition si échec
+            log_setting = 2
+    
+    # Mode 2: Proposition d'enregistrement
+    if log_setting == 2:
+        try:
+            filename, _ = QFileDialog.getSaveFileName(
+                parent,
+                "Sauvegarder les logs",
+                "",
+                "Fichiers texte (*.txt)"
+            )
+            
+            if filename:
+                if not filename.lower().endswith('.txt'):
+                    filename += '.txt'
+                    
+                with open(filename, "w", encoding="utf-8") as f:
+                    f.write("Compte rendu du traitement :\n\n" + console_logs)
+                
+                logging.info(f"Logs enregistrés dans : {filename}")
+                return filename
+                
+        except Exception as e:
+            logging.error(f"Erreur lors de l'enregistrement manuel des logs: {str(e)}")
+            if parent:
+                QMessageBox.critical(
+                    parent,
+                    "Erreur",
+                    f"Impossible d'enregistrer les logs : {str(e)}"
+                )
+    
+    return None
 
 class MessagesBoxes:
     def __init__(self, type):
         super().__init__(type)
 
-    def error(self, title, message, savelog:bool, console_logs=None):
+    def error(self, title, message, savelog:bool, console_logs=None, folder=None):
         if savelog and console_logs is None:
             raise Exception("When savelog is True, console_logs can't be None.")
 
@@ -55,11 +126,18 @@ class MessagesBoxes:
                     "========== Console output ==========\n\n"
                     f"{console_logs}"
                 )
-
+            log_param = int(get_param("logs") or "2")
             msg.setText(f"{message}")
-            save_button = QPushButton("Sauvegarder les logs")
-            save_button.clicked.connect(lambda: save_logs(console_logs, parent=self))
-            msg.addButton(save_button, QMessageBox.ActionRole)
+            if log_param == 1:
+                save_logs(
+                    console_logs=console_logs,
+                    parent=self,
+                    import_dir=folder if folder is not None else (self.FOLDER if hasattr(self, 'FOLDER') else None)
+                )
+            elif log_param == 2:
+                save_button = QPushButton("Sauvegarder les logs")
+                save_button.clicked.connect(lambda: save_logs(console_logs, parent=self))
+                msg.addButton(save_button, QMessageBox.ActionRole)
         else:
 
             msg.setText(message)
@@ -67,27 +145,45 @@ class MessagesBoxes:
         msg.setIconPixmap(QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)),"error.svg")))
         msg.exec_()
 
-    def succes(self, title, message, savelog:bool, console_logs=None):
+    def succes(self, title, message, savelog:bool, console_logs=None, folder=None):
+        """
+        Affiche un message de succès avec gestion des logs
+        
+        Args:
+            title (str): Titre de la boîte de dialogue
+            message (str): Message à afficher
+            savelog (bool): Si True, active la gestion des logs
+            console_logs (str, optional): Contenu des logs à sauvegarder
+            folder (str, optional): Dossier pour l'enregistrement automatique
+        """
         if savelog and console_logs is None:
-            raise Exception("When savelog is True, console_logs can't be None.")
+            raise ValueError("When savelog is True, console_logs can't be None.")
+            
         msg = QMessageBox(self)
         msg.setWindowTitle(title)
+        
+        # Gestion des logs si demandé
         if savelog:
-            if console_logs is not None:
-                console_logs = (
-                    "========== Console output ==========\n\n"
-                    f"{console_logs}"
+            log_param = int(get_param("logs") or "2")
+            
+            if log_param == 1:
+                save_logs(
+                    console_logs=console_logs,
+                    parent=self,
+                    import_dir=folder if folder is not None else (self.FOLDER if hasattr(self, 'FOLDER') else None)
                 )
-
-            msg.setText(f"{message}")
-            save_button = QPushButton("Sauvegarder les logs")
-            save_button.clicked.connect(lambda: save_logs(console_logs, parent=self))
-            msg.addButton(save_button, QMessageBox.ActionRole)
-        else:
-
-            msg.setText(message)
+            elif log_param == 2:
+                save_button = QPushButton("Sauvegarder les logs")
+                save_button.clicked.connect(lambda: save_logs(
+                    console_logs=console_logs,
+                    parent=self,
+                    import_dir=folder if folder is not None else (self.FOLDER if hasattr(self, 'FOLDER') else None)
+                ))
+                msg.addButton(save_button, QMessageBox.ActionRole)
+            
+        msg.setText(message)
         msg.addButton(QMessageBox.Ok)
-        msg.setIconPixmap(QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)),"succes.svg")))
+        msg.setIconPixmap(QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)), "succes.svg")))
         msg.exec_()
 
 class LoginDialog(QDialog):
@@ -122,10 +218,15 @@ def help_icon_widget(tooltip_text):
     return label
 
 class DourBaseDialog(QDialog):
+    def save_log_setting(self):
+        """Sauvegarde le paramètre de log sélectionné"""
+        log_setting = self.log_combo.currentData()
+        s.setValue("DourBase/logs", str(log_setting))
+        
     def __init__(self, parent=None):
         super().__init__(parent)
         self.backup_consultation_path = None
-        self.backup_postgis_path = None
+        self.backup_travail_path = None
         self.FOLDER = ''
         self._database_password = ""
         self._database_schema = ""
@@ -172,7 +273,7 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(db_layout)
 
         self.combo_exploitant = QComboBox()
-        options = sorted(open_config("EXPLOITANT.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("EXPLOITANT.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_exploitant.addItem(f"{opt[0]} ({opt[1]})",  opt[1])
@@ -183,7 +284,7 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(combo_exploitant_layout)
 
         self.combo_depco = QComboBox()
-        options = sorted(open_config("DEPCO.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("DEPCO.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_depco.addItem(f"{opt[0]} ({opt[1]})", (opt[0], opt[1]))
@@ -212,7 +313,7 @@ class DourBaseDialog(QDialog):
 
         self.localisat_edit = QLineEdit(self)
         self.localisat_edit.setPlaceholderText("Rue des...")
-        self.content_layout.addWidget(QLabel("Localisat :"))
+        self.content_layout.addWidget(QLabel("Localisation :"))
         localisat_edit_layout = QHBoxLayout()
         localisat_edit_layout.addWidget(self.localisat_edit)
         localisat_edit_layout.addWidget(help_icon_widget("La localisation du plan sera ajoutée à BASEDOC"))
@@ -220,7 +321,7 @@ class DourBaseDialog(QDialog):
 
         self.plan_type_edit = QLineEdit(self)
         self.plan_type_edit.setPlaceholderText("Plan de récolement")
-        self.content_layout.addWidget(QLabel("Type de plan"))
+        self.content_layout.addWidget(QLabel("Type de plan :"))
         combo_type_plan_layout = QHBoxLayout()
         combo_type_plan_layout.addWidget(self.plan_type_edit)
         combo_type_plan_layout.addWidget(help_icon_widget("Le type de plan sera ajoutée à BASEDOC"))
@@ -235,7 +336,7 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(b_etude_edit_layout)
 
         self.combo_entreprise = QComboBox()
-        options = sorted(open_config("ENTREPRISE.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("ENTREPRISE.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_entreprise.addItem(f"{opt[0]} ({opt[1]})", (opt[0], opt[1]))
@@ -258,7 +359,7 @@ class DourBaseDialog(QDialog):
         self.echelle_edit = QLineEdit(self)
         self.echelle_edit.setPlaceholderText("échelle (ex : 200)")
         self.echelle_edit.setValidator(QIntValidator())
-        self.content_layout.addWidget(QLabel("echelle :"))
+        self.content_layout.addWidget(QLabel("Echelle :"))
         echelle_edit_layout = QHBoxLayout()
         echelle_edit_layout.addWidget(self.echelle_edit)
         echelle_edit_layout.addWidget(help_icon_widget("Celle-ci sera ajoutée à BASEDOC"))
@@ -273,7 +374,7 @@ class DourBaseDialog(QDialog):
         self.cote.setChecked(True)
 
         self.combo_etat = QComboBox()
-        options = sorted(open_config("ETAT.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("ETAT.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_etat.addItem(f"{opt[0]} ({opt[0]})", (opt[0], opt[0]))
@@ -284,7 +385,7 @@ class DourBaseDialog(QDialog):
         self.content_layout.addLayout(combo_etat_layout)
 
         self.combo_support = QComboBox()
-        options = sorted(open_config("Q_SUPPORT.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("Q_SUPPORT.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_support.addItem(f"{opt[0]} ({opt[0]})", (opt[0], opt[0]))
@@ -303,7 +404,7 @@ class DourBaseDialog(QDialog):
         self.utilisat.setChecked(False)
 
         self.combo_moa = QComboBox()
-        options = sorted(open_config("MOA.csv", "config"), key=lambda x: x[0].lower())
+        options = sorted(open_config("MOA.csv", "config"), key=lambda x: int(x[1]))
         for opt in options:
             logging.info(f"the option is {opt}")
             self.combo_moa.addItem(f"{opt[0]} ({opt[1]})", opt[1])
@@ -315,7 +416,7 @@ class DourBaseDialog(QDialog):
 
         # File name
         self.file_name_edit = QLineEdit(self)
-        self.file_name_edit.setReadOnly(False) # On propose à l'utilisateur le nom généré par défaut, mais il doit pouvoir le changer.
+        self.file_name_edit.setReadOnly(False)
         self.content_layout.addWidget(QLabel("Nom de fichier généré :"))
         file_name_edit_layout = QHBoxLayout()
         file_name_edit_layout.addWidget(self.file_name_edit)
@@ -430,15 +531,15 @@ class DourBaseDialog(QDialog):
         self.db_password.textChanged.connect(self.update_deploy_button_state)
         self.deploy_layout.addWidget(self.db_password)
 
-        self.backup_postgis_path_label = QLabel("Le dossier sélectionné pour la sauvegarde PostGIS apparaîtra ici.")
-        self.deploy_layout.addWidget(self.backup_postgis_path_label)
+        self.backup_travail_path_label = QLabel("Sélectionner le dossier de sauvegarde de la base de données de travail.")
+        self.deploy_layout.addWidget(self.backup_travail_path_label)
 
-        self.backup_postgis_path_button = QPushButton("Select Directory")
+        self.backup_travail_path_button = QPushButton("Select Directory")
 
-        self.backup_postgis_path_button.clicked.connect(self.select_directory_postgis)
-        self.deploy_layout.addWidget(self.backup_postgis_path_button)
+        self.backup_travail_path_button.clicked.connect(self.select_directory_postgis)
+        self.deploy_layout.addWidget(self.backup_travail_path_button)
 
-        self.backup_consultation_path_label = QLabel("Le dossier sélectionné pour la sauvegarde PostGIS apparaîtra ici.")
+        self.backup_consultation_path_label = QLabel("Sélectionner le dossier de sauvegarde de la base de données de consultation.")
         self.deploy_layout.addWidget(self.backup_consultation_path_label)
 
         self.backup_consultation_path_button = QPushButton("Select Directory")
@@ -526,6 +627,30 @@ class DourBaseDialog(QDialog):
         self.reset_csv_config_dir_button.clicked.connect(self.reset_csv_config_dir)
         self.param_layout.addWidget(self.reset_csv_config_dir_button)
 
+        # Séparateur
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        self.param_layout.addWidget(separator)
+
+        # Section Logs
+        self.options_de_journalisation = (QLabel("<b>Options de journalisation</b>"))
+        self.param_layout.addWidget(self.options_de_journalisation)
+        self.log_combo = QComboBox()
+        self.log_combo.addItem("1 - Enregistrement automatique des logs", 1)
+        self.log_combo.addItem("2 - Proposer d'enregistrer les logs", 2)
+        self.log_combo.addItem("3 - Désactiver les logs", 3)
+        
+        # Charger la valeur sauvegardée ou utiliser 2 par défaut
+        saved_log_setting = int(s.value("DourBase/logs", "2"))
+        index = self.log_combo.findData(saved_log_setting)
+        if index >= 0:
+            self.log_combo.setCurrentIndex(index)
+            
+        self.log_combo.currentIndexChanged.connect(self.save_log_setting)
+        self.param_layout.addWidget(QLabel("Comportement des logs :"))
+        self.param_layout.addWidget(self.log_combo)
+        
         # Ajoute un espace extensible en bas pour forcer l'alignement en haut
         self.param_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
@@ -660,7 +785,8 @@ class DourBaseDialog(QDialog):
         dir_path = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
 
         if dir_path:
-            self.backup_consultation_path_label.setText(f"Dossier sélectionné pour la sauvegarde PostGIS :\n{dir_path}")
+            self.backup_consultation_path_label.setText(f"Dossier sélectionné pour la sauvegarde de la base de données de consultation :\n{dir_path}")
+            self.save_dir_path = dir_path
             self.backup_consultation_path = dir_path
             self.update_deploy_button_state()
 
@@ -668,11 +794,14 @@ class DourBaseDialog(QDialog):
         dir_path = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
 
         if dir_path:
-            self.backup_postgis_path_label.setText(f"Dossier sélectionné pour la sauvegarde PostGIS :\n{dir_path}")
-            self.backup_postgis_path = dir_path
+            self.backup_travail_path_label.setText(f"Dossier sélectionné pour la sauvegarde de la base de données de travail :\n{dir_path}")
+            self.backup_travail_path = dir_path
             self.update_deploy_button_state()
 
     def update_deploy_button_state(self):
+        if is_test_mode:
+            self.deploy_button.setEnabled(True)
+            return
         # 1. Vérifier que les champs utilisateur et mot de passe ne sont pas vides
         username_valid = bool(self.db_username.text().strip())
         password_valid = bool(self.db_password.text())
@@ -685,10 +814,10 @@ class DourBaseDialog(QDialog):
         self.db_conflict_label.setVisible(conflict)
         
         # 3. Vérifier que les dossiers de backup sont sélectionnés
-        backup_postgis_text = self.backup_postgis_path_label.text()
+        backup_travail_text = self.backup_travail_path_label.text()
         backup_consultation_text = self.backup_consultation_path_label.text()
         backup_default_text = "Le dossier sélectionné pour la sauvegarde PostGIS apparaîtra ici."
-        backup_path_postgis_valid = backup_postgis_text != backup_default_text and hasattr(self, 'backup_postgis_path')
+        backup_path_postgis_valid = backup_travail_text != backup_default_text and hasattr(self, 'backup_travail_path')
         backup_path_consultation_valid = backup_consultation_text != backup_default_text and hasattr(self, 'backup_consultation_path')
         
         # Activer le bouton seulement si toutes les conditions sont remplies
@@ -976,22 +1105,36 @@ class DourBaseDialog(QDialog):
             "========== Console output ==========\n\n"
             f"{self.console_textedit.toPlainText()}"
         )
+
         msg = QMessageBox(self)
         msg.setWindowTitle("Insertion réussie dans la base !")
         msg.setText("Compte rendu du traitement :\n\n" + summary)
-        save_button = QPushButton("Sauvegarder les logs")
-        msg.addButton(save_button, QMessageBox.ActionRole)
+
+        # Préparation des logs complets
+        full_logs = "Compte rendu du traitement :\n\n" + summary + "\nDétails :\n" + "\n".join(self.report.get("logs", []))
+        if hasattr(self, 'console_textedit'):
+            full_logs += console_logs
+        
+        # Gestion des logs avec save_logs qui gère déjà tous les cas
+        log_param = int(get_param("logs") or "2")
+        
+        if log_param == 1:
+            save_logs(
+                console_logs=full_logs,
+                parent=self,
+                import_dir=self.FOLDER
+            )
+        elif log_param == 2:
+            save_button = QPushButton("Sauvegarder les logs")
+            save_button.clicked.connect(lambda: save_logs(
+                console_logs=full_logs,
+                parent=self,
+                import_dir=self.FOLDER if hasattr(self, 'FOLDER') else None
+            ))
+            msg.addButton(save_button, QMessageBox.ActionRole)
+
         msg.addButton(QMessageBox.Ok)
 
-        def save_logs():
-            filename, _ = QFileDialog.getSaveFileName(self, "Sauvegarder les logs", "", "Fichiers texte (*.txt)")
-            if filename:
-                with open(filename, "w", encoding="utf-8") as f:
-                    f.write("Compte rendu du traitement :\n\n" + summary + "\nDétails :\n")
-                    f.write("\n".join(self.report["logs"]))
-                    f.write(console_logs)
-
-        save_button.clicked.connect(save_logs)
         msg.exec_()
         self.tabs.removeTab(4)
 
@@ -1041,132 +1184,182 @@ class DourBaseDialog(QDialog):
     def run_sql(self):
         self.add_console_tab()
         self.log_to_console("[INFO] Run_sql called")
-        database = self.get_selected_db_params()
-        if database is None:
-            print("[WARNING] Database is none. Aborting")
-            self.log_to_console("[WARNING] Database is none. Aborting")
-            return
-        try:
-            check_shapefile_completeness(self.FOLDER)
-        except FileNotFoundError as e:
-            # QMessageBox.critical(self, "Erreur",
-            #                      f"Erreur lors de la récupération des fichiers :\n{e}\n\nAjout dans la base de données annulé.")
-            self.log_to_console(f"[ERROR] Erreur lors de la récupération des fichiers : {e} Ajout dans la base de données annulé.")
-            MessagesBoxes.error(self, "Erreur",
-                                f"Erreur lors de la récupération des fichiers :\n{e}\n\nAjout dans la base de données annulé.",
-                                savelog=True,
-                                console_logs=self.console_textedit.toPlainText())
-            return
-
-
-        self.auteur = self.b_etude_edit.text()
-        convert_dir = main_prepare_shapefiles(self.FOLDER)
-        self.FOLDER = convert_dir
-        self.SHP = os.path.join(self.FOLDER, '*.shp')
-        depco = self.combo_depco.currentData()
-        depco = depco[1]
-        num_source = self.num_source_edit.text()
-        aep = '*' if self.aep_cb.isChecked() else ''
-        eu = '*' if self.eu_cb.isChecked() else ''
-        epl = '*' if self.epl_cb.isChecked() else ''
-        cote = 'Oui' if self.cote.isChecked() else 'Non'
-        utilisat = 'Oui' if self.utilisat.isChecked() else 'Non'
-        no_origine = ''
-        localisat = self.localisat_edit.text()
-        localisat = localisat.replace("'", "''")
-        date_qdate = self.date_plan_edit.date()
-        type_plan = self.plan_type_edit.text()
-        date_str = date_qdate.toString("yyyy-MM-dd")
-        b_etude = self.b_etude_edit.text()
-        entreprise = self.combo_entreprise.currentData()
-        entreprise = entreprise[1]
-        echelle = self.echelle_edit.text()
-        etat = self.combo_etat.currentData()
-        etat = etat[1]
-        q_support = self.combo_support.currentData()
-        q_support = q_support[1]
-        nom_fichier = self.file_name_edit.text()
-        moa = self.combo_moa.currentData()
-        id_source = str(depco) + '_' + str(num_source)
-        exploitant = self.combo_exploitant.currentData()
-        hyperliens = './pdf/' + nom_fichier + '.pdf'
-        ID_OBJET = None
-        ND_AMONT = None
-        ND_AVAL = None
-        ID_CARG = None
-        self.report = {
-            "total_layers": 0,
-            "added_layers": 0,
-            "modified_layers": 0,
-            "shp_files_processed": 0,
-            "shp_files_errors": 0,
-            "shp_files_ignored": 0,
-            "logs": []
-        }
-
-        shp_files = glob.glob(self.SHP)
-        self.report["total_layers"] = len(shp_files)
-
-        text = (
-            f"[INFO] Données utilisée dans le traitement : \n"
-            f"* auteur : {self.auteur}\n"
-            f"* Dossier de sortie : {convert_dir}\n"
-            f"* fichiers shp : {self.SHP}\n"
-            f"* depco : {depco}\n"
-            f"* num_source : {num_source}\n"
-            f"* aep : {'non' if aep == '' else 'oui'}\n"
-            f"* eu : {'non' if eu == '' else 'oui'}\n"
-            f"* epl : {'non' if epl == '' else 'oui'}\n"
-            f"* cote : {'non' if cote == '' else 'oui'}\n"
-            f"* utilisat : {utilisat}\n"
-            f"* no_origine : {'Données vides' if no_origine == '' else no_origine}\n"
-            f"* localisat : {'localisat non renseigné' if localisat == '' else localisat}\n"
-            f"* date de plan : {date_str}\n"
-            f"* type de plan : {'type de plan non renseigné' if type_plan == '' else type_plan}\n"
-            f"* bureau d\'étude : {'bureau d\'étude non renseigné' if b_etude == '' else b_etude}\n"
-            f"* entreprise {entreprise}\n"
-            f"* échelle : {'échelle non renseigné' if echelle == '' else echelle}\n"
-            f"* etat : {etat}\n"
-            f"* Qualité de support : {q_support}\n"
-            f"* nom du fichier : {nom_fichier}\n"
-            f"* moa : {moa}\n"
-            f"* id source : {id_source}\n"
-            f"* exploitant : {exploitant}\n"
-            f"* fichiers shp : {shp_files}\n"
-        )
-        self.log_to_console(text)
-
-
-        try:
-            # Ajout a la basedoc
-            if not database["password"]:
-                QMessageBox.critical(self, "Erreur", "Aucun mot de passe PostgreSQL fourni, connexion annulée.")
-                self.log_to_console(
-                    f"[ERROR] Aucun mot de passe PostgreSQL fourni, connexion annulée.")
+        if not is_test_mode:
+            try:
+                database = self.get_selected_db_params()
+            except Exception as e:
+                if "authentication failed" in str(e).lower():
+                    self.log_to_console("[WARNING] Authentification failed")
+                    QMessageBox.critical(self, "Erreur d'authentification", 
+                                          "Échec de l'authentification.\nVeuillez vérifier votre nom d'utilisateur et votre mot de passe.")
+                    self.run_sql()
+                    return
+                else:
+                    self.log_to_console(f"[ERROR] Error getting database params: {e}")
+                    MessagesBoxes.error(self, "Erreur de connexion", 
+                                        f"Impossible de se connecter à la base de données. Erreur: {e}",savelog=True,console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
+                    return
+            if database is None:
+                print("[WARNING] Database is none. Aborting")
+                self.log_to_console("[WARNING] Database is none. Aborting")
+                return
+            try:
+                check_shapefile_completeness(self.FOLDER)
+            except FileNotFoundError as e:
+                # QMessageBox.critical(self, "Erreur",
+                #                      f"Erreur lors de la récupération des fichiers :\n{e}\n\nAjout dans la base de données annulé.")
+                self.log_to_console(f"[ERROR] Erreur lors de la récupération des fichiers : {e} Ajout dans la base de données annulé.")
+                MessagesBoxes.error(self, "Erreur",
+                                    f"Erreur lors de la récupération des fichiers :\n{e}\n\nAjout dans la base de données annulé.",
+                                    savelog=True,
+                                    console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
                 return
 
-            conn = psycopg2.connect(
-                host=database["host"],
-                dbname=database["dbname"],
-                user=database["user"],
-                password=database["password"],
-                port=database["port"]
-            )
-            cursor = conn.cursor()
 
-            cursor.execute(
-                f"SELECT 1 FROM {database['schema']}.basedoc WHERE id_source = %s",
-                (id_source,)
-            )
-            exists = cursor.fetchone() is not None
+            self.auteur = self.b_etude_edit.text()
+            convert_dir = main_prepare_shapefiles(self.FOLDER)
+            self.NEW_FOLDER = convert_dir
+            self.SHP = os.path.join(self.NEW_FOLDER, '*.shp')
+            depco = self.combo_depco.currentData()
+            depco = depco[1]
+            num_source = self.num_source_edit.text()
+            aep = '*' if self.aep_cb.isChecked() else ''
+            eu = '*' if self.eu_cb.isChecked() else ''
+            epl = '*' if self.epl_cb.isChecked() else ''
+            cote = 'Oui' if self.cote.isChecked() else 'Non'
+            utilisat = 'Oui' if self.utilisat.isChecked() else 'Non'
+            no_origine = ''
+            localisat = self.localisat_edit.text().replace("'", "''")
+            date_qdate = self.date_plan_edit.date()
+            type_plan = self.plan_type_edit.text().replace("'", "''")
+            date_str = date_qdate.toString("yyyy-MM-dd")
+            b_etude = self.b_etude_edit.text()
+            entreprise = self.combo_entreprise.currentData()
+            entreprise = entreprise[1]
+            echelle = self.echelle_edit.text()
+            etat = self.combo_etat.currentData()
+            etat = etat[1]
+            q_support = self.combo_support.currentData()
+            q_support = q_support[1]
+            nom_fichier = self.file_name_edit.text()
+            moa = self.combo_moa.currentData()
+            id_source = str(depco) + '_' + str(num_source)
+            exploitant = self.combo_exploitant.currentData()
+            hyperliens = './pdf/' + nom_fichier + '.pdf'
+            ID_OBJET = None
+            ND_AMONT = None
+            ND_AVAL = None
+            ID_CARG = None
+            self.report = {
+                "total_layers": 0,
+                "added_layers": 0,
+                "modified_layers": 0,
+                "shp_files_processed": 0,
+                "shp_files_errors": 0,
+                "shp_files_ignored": 0,
+                "logs": []
+            }
 
-            if exists:
+            shp_files = glob.glob(self.SHP)
+            self.report["total_layers"] = len(shp_files)
+
+            text = (
+                f"[INFO] Données utilisée dans le traitement : \n"
+                f"* auteur : {self.auteur}\n"
+                f"* Dossier de sortie : {convert_dir}\n"
+                f"* fichiers shp : {self.SHP}\n"
+                f"* depco : {depco}\n"
+                f"* num_source : {num_source}\n"
+                f"* aep : {'non' if aep == '' else 'oui'}\n"
+                f"* eu : {'non' if eu == '' else 'oui'}\n"
+                f"* epl : {'non' if epl == '' else 'oui'}\n"
+                f"* cote : {'non' if cote == '' else 'oui'}\n"
+                f"* utilisat : {utilisat}\n"
+                f"* no_origine : {'Données vides' if no_origine == '' else no_origine}\n"
+                f"* localisat : {'localisat non renseigné' if localisat == '' else localisat}\n"
+                f"* date de plan : {date_str}\n"
+                f"* type de plan : {'type de plan non renseigné' if type_plan == '' else type_plan}\n"
+                f"* bureau d\'étude : {'bureau d\'étude non renseigné' if b_etude == '' else b_etude}\n"
+                f"* entreprise {entreprise}\n"
+                f"* échelle : {'échelle non renseigné' if echelle == '' else echelle}\n"
+                f"* etat : {etat}\n"
+                f"* Qualité de support : {q_support}\n"
+                f"* nom du fichier : {nom_fichier}\n"
+                f"* moa : {moa}\n"
+                f"* id source : {id_source}\n"
+                f"* exploitant : {exploitant}\n"
+                f"* fichiers shp : {shp_files}\n"
+            )
+            self.log_to_console(text)
+
+
+            try:
+                # Ajout a la basedoc
+                if not database["password"]:
+                    QMessageBox.critical(self, "Erreur", "Aucun mot de passe PostgreSQL fourni, connexion annulée.")
+                    self.log_to_console(
+                        f"[ERROR] Aucun mot de passe PostgreSQL fourni, connexion annulée.")
+                    return
+
+                try:
+                    conn = psycopg2.connect(
+                        host=database["host"],
+                        dbname=database["dbname"],
+                        user=database["user"],
+                        password=database["password"],
+                        port=database["port"]
+                    )
+                    cursor = conn.cursor()
+                except Exception as e:
+                    error_message = str(e)
+                    if "authentication failed" in error_message.lower():
+                        QMessageBox.critical(self, "Erreur d'authentification", 
+                                          "Échec de l'authentification.\nVeuillez vérifier votre nom d'utilisateur et votre mot de passe.")
+                        self.log_to_console("[WARNING] Authentification failed")
+                        self.run_sql()
+                    else:
+                        QMessageBox.critical(self, "Erreur de connexion", 
+                                          f"Impossible de se connecter à la base de données.\nErreur: {error_message}")
+                        self.log_to_console(f"[ERROR] Error connecting to the database: {error_message}")
+                    return
+
+                cursor.execute(
+                    f"SELECT 1 FROM {database['schema']}.basedoc WHERE id_source = %s",
+                    (id_source,)
+                )
+                exists = cursor.fetchone() is not None
+
+                if exists:
+                    self.log_to_console(
+                        f"[WARNING] Un enregistrement avec le num_source '{id_source}' existe déjà.\n[INFO] Affichage de la popup de confirmation")
+                    reply = QMessageBox.question(
+                        self,
+                        "Attention",
+                        f"Un enregistrement avec le num_source '{id_source}' existe déjà.\nVoulez-vous continuer ?",
+                        QMessageBox.Yes | QMessageBox.No
+                    )
+                    self.log_to_console(
+                        f"[INFO] Popup displayed")
+                    if reply == QMessageBox.No:
+                        self.log_to_console(
+                            f"[INFO] User answered 'NO'. Aborting")
+                        cursor.close()
+                        conn.close()
+                        return
+                    else:
+                        self.log_to_console(
+                            f"[INFO] User answered 'YES'.")
+                        cursor.close()
+                        conn.close()
+            except Exception as e:
+                print(traceback.format_exc())
                 self.log_to_console(
-                    f"[WARNING] Un enregistrement avec le num_source '{id_source}' existe déjà.\n[INFO] Affichage de la popup de confirmation")
+                    f"[ERROR] Erreur lors de la verification de la présence de {id_source} dans la base de données : {e}")
+                self.log_to_console("[INFO] affichage de la popup de confirmation")
                 reply = QMessageBox.question(
                     self,
-                    "Attention",
-                    f"Un enregistrement avec le num_source '{id_source}' existe déjà.\nVoulez-vous continuer ?",
+                    "Woops",
+                    f"Désolée. Une erreur est survenue lors de la verification de la présence de {id_source} dans la base de données.\nVoulez-vous continuer ?\n\nNote : l'erreur est visible dans la console, et vous pourez enregistrez la sortie de la console à la fin.",
                     QMessageBox.Yes | QMessageBox.No
                 )
                 self.log_to_console(
@@ -1174,405 +1367,369 @@ class DourBaseDialog(QDialog):
                 if reply == QMessageBox.No:
                     self.log_to_console(
                         f"[INFO] User answered 'NO'. Aborting")
-                    cursor.close()
-                    conn.close()
                     return
                 else:
                     self.log_to_console(
                         f"[INFO] User answered 'YES'.")
-                    cursor.close()
-                    conn.close()
-        except Exception as e:
-            print(traceback.format_exc())
-            self.log_to_console(
-                f"[ERROR] Erreur lors de la verification de la présence de {id_source} dans la base de données : {e}")
-            self.log_to_console("[INFO] affichage de la popup de confirmation")
-            reply = QMessageBox.question(
-                self,
-                "Woops",
-                f"Désolée. Une erreur est survenue lors de la verification de la présence de {id_source} dans la base de données.\nVoulez-vous continuer ?\n\nNote : l'erreur est visible dans la console, et vous pourez enregistrez la sortie de la console à la fin.",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            self.log_to_console(
-                f"[INFO] Popup displayed")
-            if reply == QMessageBox.No:
-                self.log_to_console(
-                    f"[INFO] User answered 'NO'. Aborting")
-                return
-            else:
-                self.log_to_console(
-                    f"[INFO] User answered 'YES'.")
-        try:
-            for layer_path in shp_files:
-                print(f"Traitement de la couche : {layer_path}")
-                self.log_to_console(
-                    f"[INFO] Traitement de la couche : {layer_path}")
-                try:
-                    layer_edit = QgsVectorLayer(layer_path, '', 'ogr')
-                    if not layer_edit.isValid():
-                        self.report["shp_files_errors"] += 1
-                        self.log_to_console(
-                            f"[ERROR] Couche invalide {layer_path}")
-                        self.report["logs"].append(f"Erreur : Couche invalide {layer_path}")
-                        QMessageBox.critical(self, "Erreur",
-                                             f"La couche {layer_path} n'est pas valide. Modifications annulées.")
-                        continue
-
-                    # Récupération des index de champs (vérifier existence)
-                    index_id_source = layer_edit.fields().indexFromName('ID_SOURCE')
-                    index_auteur = layer_edit.fields().indexFromName('AUTEUR')
-                    index_date_plan = layer_edit.fields().indexFromName('DATE_PLAN')
-                    index_moa = layer_edit.fields().indexFromName('MOA')
-                    index_exploitant = layer_edit.fields().indexFromName('EXPLOITANT')
-                    index_hyperliens = layer_edit.fields().indexFromName('HYPERLIENS')
-                    index_id_objet = 0
-                    index_nd_amont = layer_edit.fields().indexFromName('ND_AMONT')
-                    index_nd_aval = layer_edit.fields().indexFromName('ND_AVAL')
-                    index_id_carg = layer_edit.fields().indexFromName('ID_CARG')
-                    index_entreprise = layer_edit.fields().indexFromName('ENTREPRISE')
-                    # Démarrer l'édition
-                    if not layer_edit.startEditing():
-                        self.log_to_console(
-                            f"[ERROR] Impossible de démarrer l'édition de la couche {layer_path}.")
-                        self.report["shp_files_errors"] += 1
-                        self.report["logs"].append(f"Erreur : Impossible de démarrer l'édition {layer_path}")
-                        QMessageBox.critical(self, "Erreur",
-                                             f"Impossible de démarrer l'édition de la couche {layer_path}.")
-                        continue
-
+            try:
+                for layer_path in shp_files:
+                    print(f"Traitement de la couche : {layer_path}")
+                    self.log_to_console(
+                        f"[INFO] Traitement de la couche : {layer_path}")
                     try:
-                        modified = False
-                        for feat in layer_edit.getFeatures():
-                            fid = feat.id()
-                            if index_id_source >= 0:
-                                layer_edit.changeAttributeValue(fid, index_id_source, id_source)
-                                modified = True
-                            if index_auteur >= 0:
-                                layer_edit.changeAttributeValue(fid, index_auteur, self.auteur)
-                                modified = True
-                            if index_date_plan >= 0:
-                                layer_edit.changeAttributeValue(fid, index_date_plan,
-                                                                self.date_plan_edit.date().toString("yyyy-MM-dd"))
-                                modified = True
-                            if index_moa >= 0:
-                                layer_edit.changeAttributeValue(fid, index_moa, moa)
-                                modified = True
-                            if index_exploitant >= 0:
-                                layer_edit.changeAttributeValue(fid, index_exploitant, exploitant)
-                                modified = True
-                            if index_hyperliens >= 0:
-                                layer_edit.changeAttributeValue(fid, index_hyperliens,
-                                                                './pdf/' + self.file_name_edit.text() + '.pdf')
-                                modified = True
-                            if index_nd_amont >= 0:
-                                layer_edit.changeAttributeValue(fid, index_nd_amont, None)
-                                modified = True
-                            if index_nd_aval >= 0:
-                                layer_edit.changeAttributeValue(fid, index_nd_aval, None)
-                                modified = True
-                            if index_id_carg >= 0:
-                                layer_edit.changeAttributeValue(fid, index_id_carg, None)
-                                modified = True
-                            if index_entreprise >= 0:
-                                layer_edit.changeAttributeValue(fid, index_entreprise, entreprise)
-                                modified = True
-                        # Valider les modifications
-                        if not layer_edit.commitChanges():
-                            raise Exception("Échec de la validation des modifications.")
+                        layer_edit = QgsVectorLayer(layer_path, '', 'ogr')
+                        if not layer_edit.isValid():
+                            self.report["shp_files_errors"] += 1
+                            self.log_to_console(
+                                f"[ERROR] Couche invalide {layer_path}")
+                            self.report["logs"].append(f"Erreur : Couche invalide {layer_path}")
+                            QMessageBox.critical(self, "Erreur",
+                                                f"La couche {layer_path} n'est pas valide. Modifications annulées.")
+                            continue
 
-                        self.report["shp_files_processed"] += 1
-                        if modified:
-                            self.report["modified_layers"] += 1
-                            self.report["logs"].append(f"Modifié : {layer_path}")
-                        else:
-                            self.report["added_layers"] += 1
-                            self.report["logs"].append(f"Ajouté (pas de modif détectée) : {layer_path}")
+                        # Récupération des index de champs (vérifier existence)
+                        index_id_source = layer_edit.fields().indexFromName('ID_SOURCE')
+                        index_auteur = layer_edit.fields().indexFromName('AUTEUR')
+                        index_date_plan = layer_edit.fields().indexFromName('DATE_PLAN')
+                        index_moa = layer_edit.fields().indexFromName('MOA')
+                        index_exploitant = layer_edit.fields().indexFromName('EXPLOITANT')
+                        index_hyperliens = layer_edit.fields().indexFromName('HYPERLIENS')
+                        index_id_objet = 0
+                        index_nd_amont = layer_edit.fields().indexFromName('ND_AMONT')
+                        index_nd_aval = layer_edit.fields().indexFromName('ND_AVAL')
+                        index_id_carg = layer_edit.fields().indexFromName('ID_CARG')
+                        index_entreprise = layer_edit.fields().indexFromName('ENTREPRISE')
+                        # Démarrer l'édition
+                        if not layer_edit.startEditing():
+                            self.log_to_console(
+                                f"[ERROR] Impossible de démarrer l'édition de la couche {layer_path}.")
+                            self.report["shp_files_errors"] += 1
+                            self.report["logs"].append(f"Erreur : Impossible de démarrer l'édition {layer_path}")
+                            QMessageBox.critical(self, "Erreur",
+                                                f"Impossible de démarrer l'édition de la couche {layer_path}.")
+                            continue
 
+                        try:
+                            modified = False
+                            for feat in layer_edit.getFeatures():
+                                fid = feat.id()
+                                if index_id_source >= 0:
+                                    layer_edit.changeAttributeValue(fid, index_id_source, id_source)
+                                    modified = True
+                                if index_auteur >= 0:
+                                    layer_edit.changeAttributeValue(fid, index_auteur, self.auteur)
+                                    modified = True
+                                if index_date_plan >= 0:
+                                    layer_edit.changeAttributeValue(fid, index_date_plan,
+                                                                    self.date_plan_edit.date().toString("yyyy-MM-dd"))
+                                    modified = True
+                                if index_moa >= 0:
+                                    layer_edit.changeAttributeValue(fid, index_moa, moa)
+                                    modified = True
+                                if index_exploitant >= 0:
+                                    layer_edit.changeAttributeValue(fid, index_exploitant, exploitant)
+                                    modified = True
+                                if index_hyperliens >= 0:
+                                    layer_edit.changeAttributeValue(fid, index_hyperliens,
+                                                                    './pdf/' + self.file_name_edit.text() + '.pdf')
+                                    modified = True
+                                if index_nd_amont >= 0:
+                                    layer_edit.changeAttributeValue(fid, index_nd_amont, None)
+                                    modified = True
+                                if index_nd_aval >= 0:
+                                    layer_edit.changeAttributeValue(fid, index_nd_aval, None)
+                                    modified = True
+                                if index_id_carg >= 0:
+                                    layer_edit.changeAttributeValue(fid, index_id_carg, None)
+                                    modified = True
+                                if index_entreprise >= 0:
+                                    layer_edit.changeAttributeValue(fid, index_entreprise, entreprise)
+                                    modified = True
+                            # Valider les modifications
+                            if not layer_edit.commitChanges():
+                                raise Exception("Échec de la validation des modifications.")
+
+                            self.report["shp_files_processed"] += 1
+                            if modified:
+                                self.report["modified_layers"] += 1
+                                self.report["logs"].append(f"Modifié : {layer_path}")
+                            else:
+                                self.report["added_layers"] += 1
+                                self.report["logs"].append(f"Ajouté (pas de modif détectée) : {layer_path}")
+
+                        except Exception as e:
+                            self.log_to_console(
+                                f"[ERROR] Erreur lors de la modification de la couche {layer_path} :\n{str(e)}")
+                            self.report["shp_files_errors"] += 1
+                            self.report["logs"].append(f"Erreur sur {layer_path} : {str(e)}")
+                            QMessageBox.critical(self, "Erreur",
+                                                f"Erreur lors de la modification de la couche {layer_path} :\n{str(e)}")
                     except Exception as e:
                         self.log_to_console(
-                            f"[ERROR] Erreur lors de la modification de la couche {layer_path} :\n{str(e)}")
-                        self.report["shp_files_errors"] += 1
-                        self.report["logs"].append(f"Erreur sur {layer_path} : {str(e)}")
+                            f"[ERROR] Error : {str(e)}")
+                        print(f"ERROR : {str(e)}")
                         QMessageBox.critical(self, "Erreur",
-                                             f"Erreur lors de la modification de la couche {layer_path} :\n{str(e)}")
-                except Exception as e:
-                    self.log_to_console(
-                        f"[ERROR] Error : {str(e)}")
-                    print(f"ERROR : {str(e)}")
-                    QMessageBox.critical(self, "Erreur",
-                                         f"Erreur : {str(e)}")
+                                            f"Erreur : {str(e)}")
 
-            # Import des donnees dans PostgreSQL-PostGIS
-            print("self.SHP =", self.SHP)
-            self.log_to_console(f"self.SHP = {self.SHP}")
-            print(f"glob.glob(self.SHP) = {glob.glob(self.SHP)}")
-            self.log_to_console(f"glob.glob(self.SHP) = {glob.glob(self.SHP)}")
-            for layer in shp_files:
-                try:
-                    self.log_to_console(f"[INFO] importing layer {layer}")
-                    self.upload_to_db(layer, database)
-                    self.log_to_console(f"[INFO] layer imported succesfuly ({layer})")
-                    self.report["logs"].append(f"Import réussi : {layer}")
-                except Exception as e:
-                    self.report["shp_files_errors"] += 1
-                    self.log_to_console(f"[INFO] Error importing layer {layer}: {str(e)}")
-                    self.report["logs"].append(f"Erreur d'import sur {layer} : {str(e)}")
+                # Import des donnees dans PostgreSQL-PostGIS
+                print("self.SHP =", self.SHP)
+                self.log_to_console(f"self.SHP = {self.SHP}")
+                print(f"glob.glob(self.SHP) = {glob.glob(self.SHP)}")
+                self.log_to_console(f"glob.glob(self.SHP) = {glob.glob(self.SHP)}")
+                for layer in shp_files:
+                    try:
+                        self.log_to_console(f"[INFO] importing layer {layer}")
+                        self.upload_to_db(layer, database)
+                        self.log_to_console(f"[INFO] layer imported succesfuly ({layer})")
+                        self.report["logs"].append(f"Import réussi : {layer}")
+                    except Exception as e:
+                        self.report["shp_files_errors"] += 1
+                        self.log_to_console(f"[INFO] Error importing layer {layer}: {str(e)}")
+                        self.report["logs"].append(f"Erreur d'import sur {layer} : {str(e)}")
 
-            conn = psycopg2.connect(
-                host=database["host"],
-                dbname=database["dbname"],
-                user=database["user"],
-                password=database["password"],
-                port=database["port"]
-            )
+                conn = psycopg2.connect(
+                    host=database["host"],
+                    dbname=database["dbname"],
+                    user=database["user"],
+                    password=database["password"],
+                    port=database["port"]
+                )
 
-            sql = f"""
-            INSERT INTO {database["schema"]}.basedoc(
-                id_source,
-                depco,
-                no_origine,
-                aep,
-                eu,
-                epl,
-                localisat,
-                type_plan,
-                b_etude,
-                entreprise,
-                date,
-                echelle,
-                cote,
-                etat,
-                q_support,
-                nom_fich,
-                utilisat)
-            VALUES (
-                '{id_source}',
-                '{depco}',
-                '{no_origine}',
-                '{aep}',
-                '{eu}',
-                '{epl}',
-                '{localisat}',
-                '{type_plan}',
-                '{b_etude}',
-                '{str(entreprise)}',
-                '{date_str}',
-                '{echelle}',
-                '{cote}',
-                '{etat}',
-                '{q_support}',
-                '{nom_fichier}',
-                '{utilisat}'
-            );"""
-            print(sql)
-            self.log_to_console(f"[INFO] sql request: {sql}")
-            cursor = conn.cursor()
-            self.log_to_console(f"[INFO] executing sql request")
-            cursor.execute(sql)
-            self.log_to_console(f"[INFO] commiting changes")
-            conn.commit()
-            cursor.close()
-            self.log_to_console(f"[INFO] cursor closed")
-            conn.close()
+                sql = f"""
+                INSERT INTO {database["schema"]}.basedoc(
+                    id_source,
+                    depco,
+                    no_origine,
+                    aep,
+                    eu,
+                    epl,
+                    localisat,
+                    type_plan,
+                    b_etude,
+                    entreprise,
+                    date,
+                    echelle,
+                    cote,
+                    etat,
+                    q_support,
+                    nom_fich,
+                    utilisat)
+                VALUES (
+                    '{id_source}',
+                    '{depco}',
+                    '{no_origine}',
+                    '{aep}',
+                    '{eu}',
+                    '{epl}',
+                    '{localisat}',
+                    '{type_plan}',
+                    '{b_etude}',
+                    '{str(entreprise)}',
+                    '{date_str}',
+                    '{echelle}',
+                    '{cote}',
+                    '{etat}',
+                    '{q_support}',
+                    '{nom_fichier}',
+                    '{utilisat}'
+                );"""
+                print(sql)
+                self.log_to_console(f"[INFO] sql request: {sql}")
+                cursor = conn.cursor()
+                self.log_to_console(f"[INFO] executing sql request")
+                cursor.execute(sql)
+                self.log_to_console(f"[INFO] commiting changes")
+                conn.commit()
+                cursor.close()
+                self.log_to_console(f"[INFO] cursor closed")
+                conn.close()
+                self.log_to_console(f"[INFO] Insertion réussie dans la base.")
+                QMessageBox.information(self, "Succès", f"Insertion réussie dans la base !")
+                self.show_report_popup()
+
+            except Exception as e:
+                print(traceback.format_exc())
+                self.log_to_console(f"[ERROR] Erreur lors de l'insertion :{e}")
+                # QMessageBox.critical(self, "Erreur", f"Erreur lors de l'insertion :\n{e}")
+                MessagesBoxes.error(self, "Erreur", f"Erreur lors de l'insertion :\n{e}",
+                                    savelog=True,
+                                    console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
+        else:
+            self.report = {
+                "total_layers": 50,
+                "added_layers": 40,
+                "modified_layers": 0,
+                "shp_files_processed": 50,
+                "shp_files_errors": 5,
+                "shp_files_ignored": 5,
+                "logs": []
+            }
             self.log_to_console(f"[INFO] Insertion réussie dans la base.")
             QMessageBox.information(self, "Succès", f"Insertion réussie dans la base !")
             self.show_report_popup()
-
-        except Exception as e:
-            print(traceback.format_exc())
-            self.log_to_console(f"[ERROR] Erreur lors de l'insertion :{e}")
-            # QMessageBox.critical(self, "Erreur", f"Erreur lors de l'insertion :\n{e}")
-            MessagesBoxes.error(self, "Erreur", f"Erreur lors de l'insertion :\n{e}",
-                                savelog=True,
-                                console_logs=self.console_textedit.toPlainText())
 
     def run_deployment(self):
         global db_consultation, db_work
 
         self.add_console_tab()
         self.log_to_console("[INFO] run_deployment called")
-        groupes = self.get_groupes()
-        if not groupes:
-            MessagesBoxes.error(self,"Error", "Aucun groupes n'a été trouvé. Abandon.", savelog=True, console_logs=self.console_textedit.toPlainText())
-            return
+        if not is_test_mode:
+            
+            groupes = self.get_groupes()
+            if not groupes:
+                MessagesBoxes.error(self,"Error", "Aucun groupes n'a été trouvé. Abandon.", savelog=True, console_logs=self.console_textedit.toPlainText())
+                return
 
-        # Création de la popup
-        popup = QDialog(self)
-        popup.setWindowTitle("Sélectionner un groupe")
-        layout = QVBoxLayout(popup)
+            # Création de la popup
+            popup = QDialog(self)
+            popup.setWindowTitle("Sélectionner un groupe")
+            layout = QVBoxLayout(popup)
 
-        combo = QComboBox(popup)
-        combo.addItems(groupes)
-        layout.addWidget(QLabel("Sélectionnez le groupe d'utilisateurs de consultation :"))
-        layout.addWidget(combo)
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=popup)
-        layout.addWidget(button_box)
+            combo = QComboBox(popup)
+            combo.addItems(groupes)
+            layout.addWidget(QLabel("Sélectionnez le groupe d'utilisateurs de consultation :"))
+            layout.addWidget(combo)
+            button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=popup)
+            layout.addWidget(button_box)
 
-        button_box.accepted.connect(popup.accept)
-        button_box.rejected.connect(popup.reject)
+            button_box.accepted.connect(popup.accept)
+            button_box.rejected.connect(popup.reject)
 
-        self.log_to_console("[INFO] affichage de la popup de groupe et en attente de la réponse de l'utilisateur")
-        if popup.exec_() == QDialog.Accepted:
-            selected_group = combo.currentText()
-            group = selected_group
-            self.log_to_console("[INFO] Réponse : OK. Group: group")
-        else:
-            self.log_to_console("[INFO] Réponse : Canceled. Aborting")
-            self.tabs.removeTab(4)
-            return
-        databases = ['db_consultation', 'db_work']
-        for db in databases:
-            if db == "db_consultation":
-                dbname = self.db_consultation_combo.currentText()
-            elif db == 'db_work':
-                dbname = self.db_work_combo.currentText()
+            self.log_to_console("[INFO] affichage de la popup de groupe et en attente de la réponse de l'utilisateur")
+            if popup.exec_() == QDialog.Accepted:
+                selected_group = combo.currentText()
+                group = selected_group
+                self.log_to_console("[INFO] Réponse : OK. Group: group")
             else:
-                raise Exception(f"The selected database {db} is not defined")
-            self.log_to_console(f"[INFO] base de données : {dbname}")
-            settings = QgsSettings()
-            settings.beginGroup(f"PostgreSQL/connections/{dbname}")
-            db_dict = {
-                "host": settings.value("host", ""),
-                "port": settings.value("port", ""),
-                "dbname": settings.value("database", ""),
-                "user": settings.value("username", ""),
-                "password": settings.value("password", ""),
-                "schema": settings.value("schema", "")
-            }
-
-            safe_db_dict = db_dict.copy()
-            safe_db_dict["password"] = "[PASSWORD HIDDEN FOR SECURITY REASONS]"
-
-            self.log_to_console(f"[INFO] Dictionnaire des informations relatives à la base de données : {safe_db_dict}")
-
-            settings.endGroup()
-
-            if db == "db_consultation":
-                db_consultation = db_dict
-                schemas = get_shamas(db_consultation["host"], db_consultation["port"], db_consultation["dbname"],
-                                     self.db_username.text(),
-                                     self.db_password.text())
-                schemas.sort()
-                self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
-                self.log_to_console(f"[INFO] Affichage de la popup de sélection du schéma")
-                schema, ok = QInputDialog.getItem(self, "Schema",
-                                                  "Veuillez sélectionner le schéma désiré pour la base de données de consultation (celui-ci sera supprimé, puis recréé avec les nouvelles données) :",
-                                                  schemas, 0, False)
-
-                self.log_to_console(f"[INFO] Popup affichée. En attente de la réponse de l'utilisateur")
-                if ok and schema:
-
-                    self.log_to_console(f"[INFO] L'utilisateur a sélectionné '{schema}' ")
-                    db_consultation["schema"] = schema
+                self.log_to_console("[INFO] Réponse : Canceled. Aborting")
+                self.tabs.removeTab(4)
+                return
+            databases = ['db_consultation', 'db_work']
+            for db in databases:
+                if db == "db_consultation":
+                    dbname = self.db_consultation_combo.currentText()
+                elif db == 'db_work':
+                    dbname = self.db_work_combo.currentText()
                 else:
-                    self.log_to_console(f"[WARNING] L'utilisateur n'a rien selectionné. Aborting.")
-                    return
-            else:
-                db_work = db_dict
-                schemas = get_shamas(db_work["host"], db_work["port"], db_work["dbname"],
-                                     self.db_username.text(),
-                                     self.db_password.text())
-                schemas.sort()
-                self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
-                self.log_to_console(f"[INFO] Affichage de la popup de sélection du schéma")
-                schema, ok = QInputDialog.getItem(self, "Schema",
-                                                  "Veuillez sélectionner le schéma désiré pour la base de données de travail :",
-                                                  schemas, 0, False)
-                self.log_to_console(f"[INFO] Popup affichée. En attente de la réponse de l'utilisateur")
-                if ok and schema:
-                    self.log_to_console(f"[INFO] L'utilisateur a selectionné '{schema}' ")
-                    db_work["schema"] = schema
+                    raise Exception(f"The selected database {db} is not defined")
+                self.log_to_console(f"[INFO] base de données : {dbname}")
+                settings = QgsSettings()
+                settings.beginGroup(f"PostgreSQL/connections/{dbname}")
+                db_dict = {
+                    "host": settings.value("host", ""),
+                    "port": settings.value("port", ""),
+                    "dbname": settings.value("database", ""),
+                    "user": settings.value("username", ""),
+                    "password": settings.value("password", ""),
+                    "schema": settings.value("schema", "")
+                }
+
+                safe_db_dict = db_dict.copy()
+                safe_db_dict["password"] = "[PASSWORD HIDDEN FOR SECURITY REASONS]"
+
+                self.log_to_console(f"[INFO] Dictionnaire des informations relatives à la base de données : {safe_db_dict}")
+
+                settings.endGroup()
+
+                if db == "db_consultation":
+                    db_consultation = db_dict
+                    try:
+                        schemas = get_shamas(db_consultation["host"], db_consultation["port"], db_consultation["dbname"],
+                                            self.db_username.text(),
+                                            self.db_password.text())
+                    except Exception as e:
+                        if "authentication failed" in str(e).lower():
+                            self.log_to_console("[WARNING] Authentification failed")
+                            QMessageBox.critical(self, "Erreur d'authentification", 
+                                                  "Échec de l'authentification.\nVeuillez vérifier votre nom d'utilisateur et votre mot de passe.")
+                            self.run_deployment()
+                            return
+                        else:
+                            self.log_to_console(f"[ERROR] Error getting schemas: {e}")
+                            MessagesBoxes.error(self, "Erreur de connexion", 
+                                                f"Impossible de se connecter à la base de données. Erreur: {e}",savelog=True,console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
+                            return
+                    schemas.sort()
+                    self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
+                    self.log_to_console(f"[INFO] Affichage de la popup de sélection du schéma")
+                    schema, ok = QInputDialog.getItem(self, "Schema",
+                                                    "Veuillez sélectionner le schéma désiré pour la base de données de consultation (celui-ci sera supprimé, puis recréé avec les nouvelles données) :",
+                                                    schemas, 0, False)
+
+                    self.log_to_console(f"[INFO] Popup affichée. En attente de la réponse de l'utilisateur")
+                    if ok and schema:
+
+                        self.log_to_console(f"[INFO] L'utilisateur a sélectionné '{schema}' ")
+                        db_consultation["schema"] = schema
+                    else:
+                        self.log_to_console(f"[WARNING] L'utilisateur n'a rien selectionné. Aborting.")
+                        return
                 else:
-                    self.log_to_console(f"[WARNING] L'utilisateur n'a rien sélectionné. Aborting.")
-                    self.tabs.removeTab(4)
-                    return
+                    db_work = db_dict
+                    try:
+                        schemas = get_shamas(db_work["host"], db_work["port"], db_work["dbname"],
+                                        self.db_username.text(),
+                                        self.db_password.text())
+                    except Exception as e:
+                        if "authentication failed" in str(e).lower():
+                            self.log_to_console("[WARNING] Authentification failed")
+                            QMessageBox.critical(self, "Erreur d'authentification", 
+                                                  "Échec de l'authentification.\nVeuillez vérifier votre nom d'utilisateur et votre mot de passe.")
+                            self.run_deployment()
+                            return
+                        else:
+                            self.log_to_console(f"[ERROR] Error getting schemas: {e}")
+                            MessagesBoxes.error(self, "Erreur de connexion", 
+                                                f"Impossible de se connecter à la base de données. Erreur: {e}",savelog=True,console_logs=self.console_textedit.toPlainText(), folder=self.FOLDER)
+                            return
+                    schemas.sort()
+                    self.log_to_console(f"[INFO] Schémas disponibles : {schemas}")
+                    self.log_to_console(f"[INFO] Affichage de la popup de sélection du schéma")
+                    schema, ok = QInputDialog.getItem(self, "Schema",
+                                                    "Veuillez sélectionner le schéma désiré pour la base de données de travail :",
+                                                    schemas, 0, False)
+                    self.log_to_console(f"[INFO] Popup affichée. En attente de la réponse de l'utilisateur")
+                    if ok and schema:
+                        self.log_to_console(f"[INFO] L'utilisateur a selectionné '{schema}' ")
+                        db_work["schema"] = schema
+                    else:
+                        self.log_to_console(f"[WARNING] L'utilisateur n'a rien sélectionné. Aborting.")
+                        self.tabs.removeTab(4)
+                        return
 
-        db_consultation_backup_path = self.backup_consultation_path
-        password = self.db_password.text()
-        username = self.db_username.text()
-        backup_postgis_path = self.backup_postgis_path
-        self.log_to_console(
-            f"[INFO] Rapport des données avant le lancement :\n"
-            f"* db_consultation_backup_path : {db_consultation_backup_path}\n"
-            f"* password : {password}\n"
-            f"* username : {username}\n"
-            f"* backup_postgis_path : {backup_postgis_path}")
-        batch_content = f"""
-        @echo off
-        set PGPASSWORD={password}
-        pg_dump.exe -h {db_consultation['host']} -U {username} -d {db_consultation['dbname']} -p {db_consultation['port']} -n {db_consultation['schema']} -E UTF8 > "{db_consultation_backup_path}\\{db_consultation['schema']}_backup.sql"
-        pg_dump.exe -h {db_work['host']} -U {username} -d {db_work['dbname']} -p {db_work['port']} -n {db_work['schema']} -E UTF8 > "{backup_postgis_path}\\{db_work['schema']}.sql"
-        """
-        safe_batch_content = batch_content.replace(
-            f"set PGPASSWORD={password}",
-            "set PGPASSWORD=[PASSWORD HIDDEN FOR SECURITY REASONS]"
-        )
-
-        self.log_to_console(f"[INFO] Contenu du fichier batch : {safe_batch_content}")
-        self.log_to_console(f"[INFO] Création du fichier batch temporaire")
-        print(batch_content)
-        batch_content = '\n'.join([line.strip() for line in batch_content.split('\n') if line.strip()])
-        with tempfile.NamedTemporaryFile(suffix='.bat', delete=False, mode='w') as f:
-            f.write(batch_content)
-            bat_path = f.name
-        self.log_to_console(f"[INFO] Fichier batch temporaire créé. bat_path : {bat_path}")
-        try:
-            result = subprocess.run(
-                [bat_path],
-                shell=True,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding='cp1252'  # ou encoding='mbcs' mais en théorie c'est encoding='cp1252'. à voir si nous devons changer ça dans le futur
+            db_consultation_backup_path = self.backup_consultation_path
+            password = self.db_password.text()
+            username = self.db_username.text()
+            backup_travail_path = self.backup_travail_path
+            message = (
+                f"[INFO] Rapport des données avant le lancement :\n"
+                f"* db_consultation_backup_path : {db_consultation_backup_path}\n"
+                f"* password : {password}\n"
+                f"* username : {username}\n"
+                f"* backup_travail_path : {backup_travail_path}")
+            message = message.replace(
+                f"* password : {password}",
+                "* password : [PASSWORD HIDDEN FOR SECURITY REASONS]"
             )
-        except subprocess.CalledProcessError as e:
-            # QMessageBox.critical(self, "Erreur",
-            #                         f"Sortie standard : {e.stdout}\nErreur standard : {e.stderr}")
-            MessagesBoxes.error(self, "Erreur", f"Sortie standard : {e.stdout}\nErreur standard : {e.stderr}",
-                                savelog=True,
-                                console_logs=self.console_textedit.toPlainText())
-            self.log_to_console(f"[ERROR] Erreur lors de l'exécution du batch : Sortie standard : {e.stdout}\nErreur standard : {e.stderr}")
-            print("Erreur lors de l'exécution du batch :")
-            print("Sortie standard :", e.stdout)
-            print("Erreur standard :", e.stderr)
-
-        finally:
-            self.log_to_console(
-                f"[INFO] Supression du batch temporaire")
-            try:
-                os.unlink(bat_path)
-
-                self.log_to_console(
-                    f"[INFO] Supression terminée")
-            except:
-                pass
-        try:
+            self.log_to_console(message)
             batch_content = f"""
             @echo off
             set PGPASSWORD={password}
-            psql.exe -h {db_consultation['host']} -U {username} -d {db_consultation['dbname']} -p {db_consultation['port']} < "{backup_postgis_path}\\{db_consultation['schema']}.sql"
+            pg_dump.exe -h {db_consultation['host']} -U {username} -d {db_consultation['dbname']} -p {db_consultation['port']} -n {db_consultation['schema']} -E UTF8 > "{db_consultation_backup_path}\\{db_consultation['schema']}_backup.sql"
+            pg_dump.exe -h {db_work['host']} -U {username} -d {db_work['dbname']} -p {db_work['port']} -n {db_work['schema']} -E UTF8 > "{backup_travail_path}\\{db_work['schema']}.sql"
             """
-            conn = psycopg2.connect(
-                host=db_consultation["host"],
-                dbname=db_consultation["dbname"],
-                user=username,
-                port=db_consultation["port"],
-                password=password
-            )
-            cur = conn.cursor()
-            cur.execute(f"DROP SCHEMA IF EXISTS {db_consultation['schema']} CASCADE;")
-            conn.commit()
-            batch_content = '\n'.join([line.strip() for line in batch_content.split('\n') if line.strip()])
-            with tempfile.NamedTemporaryFile(suffix='.bat', delete=False, mode='w') as f:
-                f.write(batch_content)
-                bat_path = f.name
             safe_batch_content = batch_content.replace(
                 f"set PGPASSWORD={password}",
                 "set PGPASSWORD=[PASSWORD HIDDEN FOR SECURITY REASONS]"
             )
 
             self.log_to_console(f"[INFO] Contenu du fichier batch : {safe_batch_content}")
+            self.log_to_console(f"[INFO] Création du fichier batch temporaire")
+            print(batch_content)
+            batch_content = '\n'.join([line.strip() for line in batch_content.split('\n') if line.strip()])
+            with tempfile.NamedTemporaryFile(suffix='.bat', delete=False, mode='w') as f:
+                f.write(batch_content)
+                bat_path = f.name
             self.log_to_console(f"[INFO] Fichier batch temporaire créé. bat_path : {bat_path}")
             try:
                 result = subprocess.run(
@@ -1582,49 +1739,110 @@ class DourBaseDialog(QDialog):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    encoding='cp1252'
-                    # ou encoding='mbcs' mais en théorie c'est encoding='cp1252'. à voir si nous devons changer ça dans le futur
+                    encoding='cp1252'  # ou encoding='mbcs' mais en théorie c'est encoding='cp1252'. à voir si nous devons changer ça dans le futur
                 )
             except subprocess.CalledProcessError as e:
-            #     QMessageBox.critical(self, "Erreur",
-            #                          f"Sortie standard : {e.stdout}\nErreur standard : {e.stderr}")
-                MessagesBoxes.error(self, "Erreur", f"Sortie standard : {e.stdout}\nErreur standard : {e.stderr}", savelog=True,
-                                    console_logs=self.console_textedit.toPlainText())
-                self.log_to_console(
-                    f"[ERROR] Erreur lors de l'exécution du batch : Sortie standard : {e.stdout}\nErreur standard : {e.stderr}")
+                # QMessageBox.critical(self, "Erreur",
+                #                         f"Sortie standard : {e.stdout}\nErreur standard : {e.stderr}")
+                MessagesBoxes.error(self, "Erreur", f"Sortie standard : {e.stdout}\nErreur standard : {e.stderr}",
+                                    savelog=True,
+                                    console_logs=self.console_textedit.toPlainText(), folder=self.save_dir_path)
+                self.log_to_console(f"[ERROR] Erreur lors de l'exécution du batch : Sortie standard : {e.stdout}\nErreur standard : {e.stderr}")
                 print("Erreur lors de l'exécution du batch :")
                 print("Sortie standard :", e.stdout)
                 print("Erreur standard :", e.stderr)
 
             finally:
                 self.log_to_console(
-                    f"[INFO] Suppression du batch temporaire")
+                    f"[INFO] Supression du batch temporaire")
                 try:
                     os.unlink(bat_path)
 
                     self.log_to_console(
-                        f"[INFO] Suppression terminée")
+                        f"[INFO] Supression terminée")
                 except:
                     pass
-            command2 = f"GRANT USAGE ON SCHEMA {db_consultation['schema']} TO {group};"
-            command3 = f"ALTER DEFAULT PRIVILEGES IN SCHEMA {db_consultation['schema']} GRANT SELECT ON TABLES TO {group};"
-            self.log_to_console(f"[INFO] Executing command2 : {command2}")
-            cur.execute(command2)
-            self.log_to_console(f"[INFO] Succes.")
-            self.log_to_console(f"[INFO] Executing command3 : {command3}")
-            cur.execute(command3)
-            self.log_to_console(f"[INFO] Succes.")
-            conn.commit()
-            self.log_to_console(f"[INFO] Changes commited.")
-            cur.close()
-            self.log_to_console(f"[INFO] Cursor closed.")
-            conn.close()
+            try:
+                batch_content = f"""
+                @echo off
+                set PGPASSWORD={password}
+                psql.exe -h {db_consultation['host']} -U {username} -d {db_consultation['dbname']} -p {db_consultation['port']} < "{backup_travail_path}\\{db_consultation['schema']}.sql"
+                """
+                conn = psycopg2.connect(
+                    host=db_consultation["host"],
+                    dbname=db_consultation["dbname"],
+                    user=username,
+                    port=db_consultation["port"],
+                    password=password
+                )
+                cur = conn.cursor()
+                cur.execute(f"DROP SCHEMA IF EXISTS {db_consultation['schema']} CASCADE;")
+                conn.commit()
+                batch_content = '\n'.join([line.strip() for line in batch_content.split('\n') if line.strip()])
+                with tempfile.NamedTemporaryFile(suffix='.bat', delete=False, mode='w') as f:
+                    f.write(batch_content)
+                    bat_path = f.name
+                safe_batch_content = batch_content.replace(
+                    f"set PGPASSWORD={password}",
+                    "set PGPASSWORD=[PASSWORD HIDDEN FOR SECURITY REASONS]"
+                )
+
+                self.log_to_console(f"[INFO] Contenu du fichier batch : {safe_batch_content}")
+                self.log_to_console(f"[INFO] Fichier batch temporaire créé. bat_path : {bat_path}")
+                try:
+                    result = subprocess.run(
+                        [bat_path],
+                        shell=True,
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        encoding='cp1252'
+                        # ou encoding='mbcs' mais en théorie c'est encoding='cp1252'. à voir si nous devons changer ça dans le futur
+                    )
+                except subprocess.CalledProcessError as e:
+                #     QMessageBox.critical(self, "Erreur",
+                #                          f"Sortie standard : {e.stdout}\nErreur standard : {e.stderr}")
+                    MessagesBoxes.error(self, "Erreur", f"Sortie standard : {e.stdout}\nErreur standard : {e.stderr}", savelog=True,
+                                        console_logs=self.console_textedit.toPlainText())
+                    self.log_to_console(
+                        f"[ERROR] Erreur lors de l'exécution du batch : Sortie standard : {e.stdout}\nErreur standard : {e.stderr}")
+                    print("Erreur lors de l'exécution du batch :")
+                    print("Sortie standard :", e.stdout)
+                    print("Erreur standard :", e.stderr)
+
+                finally:
+                    self.log_to_console(
+                        f"[INFO] Suppression du batch temporaire")
+                    try:
+                        os.unlink(bat_path)
+
+                        self.log_to_console(
+                            f"[INFO] Suppression terminée")
+                    except:
+                        pass
+                command2 = f"GRANT USAGE ON SCHEMA {db_consultation['schema']} TO {group};"
+                command3 = f"ALTER DEFAULT PRIVILEGES IN SCHEMA {db_consultation['schema']} GRANT SELECT ON TABLES TO {group};"
+                self.log_to_console(f"[INFO] Executing command2 : {command2}")
+                cur.execute(command2)
+                self.log_to_console(f"[INFO] Succes.")
+                self.log_to_console(f"[INFO] Executing command3 : {command3}")
+                cur.execute(command3)
+                self.log_to_console(f"[INFO] Succes.")
+                conn.commit()
+                self.log_to_console(f"[INFO] Changes commited.")
+                cur.close()
+                self.log_to_console(f"[INFO] Cursor closed.")
+                conn.close()
+                self.log_to_console(f"[INFO] Connection closed.")
+            except Exception as e:
+                MessagesBoxes.error(self, "Erreur", f"Erreur lors du déploiement : {e}", savelog=True,
+                                    console_logs=self.console_textedit.toPlainText(), folder=self.save_dir_path)
+            finally:
+                MessagesBoxes.succes(self, "Information", "Déploiement terminé.", savelog=True, console_logs=self.console_textedit.toPlainText(), folder=self.save_dir_path)
+        else:
             self.log_to_console(f"[INFO] Connection closed.")
-        except Exception as e:
-            MessagesBoxes.error(self, "Erreur", f"Erreur lors du déploiement : {e}", savelog=True,
-                                console_logs=self.console_textedit.toPlainText())
-        finally:
-            MessagesBoxes.succes(self, "Information", "Déploiement terminé.", savelog=True, console_logs=self.console_textedit.toPlainText())
+            MessagesBoxes.succes(self, "Information", "Déploiement terminé.", savelog=True, console_logs=self.console_textedit.toPlainText(), folder=self.save_dir_path)
         # continuer la boucle de manière dégueu, mais bon faute de meilleur idée...
         # le but est de ne pas terminer le processus, on attends un certain nombre de secondes pour après fermer l'onglet console. Cela dis, ça ne sera pas super fluide, étant donné que l'interface sera mise à jour toute les 0.1 secondes.
         for item in range(1000):
