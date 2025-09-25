@@ -10,4 +10,3 @@ icon=icon.svg
 homepage=https://github.com/SIG-CLCL/DourBase
 repository=https://github.com/SIG-CLCL/DourBase
 tracker=https://github.com/SIG-CLCL/DourBase/issues
-
