@@ -17,6 +17,13 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
+def get_config_dir():
+    s = QSettings()
+    if s.value("DourBase/csv_dir", "%INTERNAL%") == "%INTERNAL%":
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config")
+    else:
+        path = s.value("DourBase/csv_dir", "%INTERNAL%")
+    return path
 def get_param(param_name):
     s = QSettings()
     return s.value(f"DourBase/{param_name}")
@@ -94,7 +101,6 @@ def check_shapefile_completeness(folder):
         raise FileNotFoundError(error_message)
     else:
         return list(shapefile_basenames)
-
 
 def get_filename_without_extension(filepath):
     """

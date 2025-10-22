@@ -15,6 +15,7 @@ from qgis.PyQt.QtWidgets import (
     QDateEdit, QScrollArea, QWidget, QFileDialog, QInputDialog, QTabWidget, QSpacerItem, QSizePolicy,
     QFormLayout, QDialogButtonBox, QGroupBox, QTextEdit, QFrame
 )
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtCore import QDate, QSettings, Qt, QSize, QCoreApplication
 from qgis.PyQt.QtGui import QPalette, QColor, QIcon, QPixmap, QIntValidator
 
@@ -855,34 +856,131 @@ class DourBaseDialog(QDialog):
             QMessageBox.critical(self, "Erreur", f"Erreur lors de la récupération des fichiers :\n{e}")
 
     def select_csv_config_dir(self):
-        needed_files = [
-            "DEPCO.csv",
-            "ENTREPRISE.csv",
-            "ETAT.csv",
-            "EXPLOITANT.csv",
-            "MOA.csv",
-            "Q_SUPPORT.csv"
-        ]
-        folder = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
+        from .csv_checker import check_csv_files
+        
+        folder = str(QFileDialog.getExistingDirectory(self, "Sélectionner le dossier des fichiers CSV"))
         if not folder:
             return
-        missing_files = [f for f in needed_files if not os.path.isfile(os.path.join(folder, f))]
-
-        if missing_files:
-            if len(missing_files) == 1:
-                msg = f"le fichier suivant est manquant : {missing_files[0]}"
-            else:
-                msg = "les fichiers suivants sont manquants :\n" + "\n".join(missing_files)
-            QMessageBox.critical(self, "Erreur", f"La configuration n'a pas été prise en compte car {msg}")
-            return
-
+            
+        result = check_csv_files(folder)
+        
+        has_errors = (
+            result.get('success') is False or  # Si success est explicitement False
+            bool(result.get('missing_files')) or  # Fichiers manquants
+            bool(result.get('list_problems')) or  # Problèmes dans la liste
+            any(  # Problèmes dans les fichiers individuels
+                file_data.get('valid') is False 
+                for file_data in result.get('files', {}).values()
+            ) or
+            result.get('summary', {}).get('with_errors', 0) > 0  # Erreurs dans le résumé
+        )
+        
+        if has_errors:
+            error_msg = ""
+            
+            # Afficher les fichiers manquants
+            missing_files = [f for f, data in result.get('files', {}).items() 
+                          if not data.get('exists')]
+            
+            if missing_files:
+                error_msg += "❌ Fichiers manquants :\n"
+                for file in missing_files:
+                    error_msg += f"   - {file}\n"
+                error_msg += "\n"
+            
+            for filename, file_data in result.get('files', {}).items():
+                if file_data.get('problems'):
+                    error_msg += f"⚠️ Problèmes dans {filename} :\n"
+                    for problem in file_data['problems']:
+                        clean_problem = problem.split('\n')[0]
+                        error_msg += f"   • {clean_problem}\n"
+                    error_msg += "\n"
+            
+            error_dialog = QMessageBox()
+            error_dialog.setIcon(QMessageBox.Critical)
+            error_dialog.setWindowTitle("Erreur de configuration")
+            error_dialog.setText("Impossible d'enregistrer le dossier :")
+            error_dialog.setInformativeText("Des problèmes ont été détectés dans les fichiers de configuration.")
+            
+            error_dialog.setDetailedText(error_msg.strip())
+            
+            if is_test_mode:
+                import json
+                json_debug = json.dumps(result, indent=2, ensure_ascii=False)
+                test_details = "\n\n=== DÉTAILS TECHNIQUES (MODE TEST) ===\n"
+                test_details += json_debug
+                error_dialog.setDetailedText(f"{error_msg.strip()}{test_details}")
+            
+            msg = error_dialog
+            
+            msg.setStyleSheet("""
+                QMessageBox {
+                    min-width: 700px;
+                }
+                QTextEdit {
+                    min-width: 650px;
+                    min-height: 150px;
+                    font-family: monospace;
+                }
+            """)
+            
+            msg.exec_()
+            return  
+            
+        # Si tout est OK, enregistrer le dossier
         try:
             s.setValue("DourBase/csv_dir", folder)
             self.dir_path_edit.setText(folder)
-            QMessageBox.information(self, "Succès",
-                                    "Dossier enregistré avec succès\nLes modifications prendront effet après un redémarrage")
-        except FileNotFoundError as e:
-            QMessageBox.critical(self, "Erreur", f"Erreur lors de l'enregistrement du dossier :\n{e}")
+            
+            # Mettre à jour l'interface si nécessaire
+            if hasattr(self, 'update_csv_status'):
+                self.update_csv_status()
+            
+            # En mode test, on affiche les détails techniques
+            if is_test_mode:
+                import json
+                json_debug = json.dumps(result, indent=2, ensure_ascii=False)
+                
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setWindowTitle("Succès (Mode Test)")
+                msg.setText("Le dossier a été enregistré avec succès.")
+                msg.setInformativeText("Les fichiers de configuration ont été vérifiés et sont valides.")
+                
+                # Ajouter le JSON complet pour le débogage
+                msg.setDetailedText(f"=== DÉTAILS TECHNIQUES (MODE TEST) ===\n{json_debug}")
+                
+                # Ajuster la taille de la boîte de dialogue
+                msg.setStyleSheet("""
+                    QMessageBox {
+                        min-width: 700px;
+                    }
+                    QTextEdit {
+                        min-width: 650px;
+                        min-height: 150px;
+                        font-family: monospace;
+                    }
+                """)
+                msg.exec_()
+            else:
+                # En mode normal, simple message de succès
+                QMessageBox.information(
+                    self, 
+                    "Succès", 
+                    "Le dossier a été enregistré avec succès.\n"
+                    "Les fichiers de configuration ont été vérifiés et sont valides."
+                )
+                                  
+        except Exception as e:
+            error_msg = f"Une erreur est survenue lors de l'enregistrement du dossier :\n{str(e)}"
+            
+            # En mode test, on ajoute les détails techniques
+            if is_test_mode:
+                import json
+                json_debug = json.dumps(result, indent=2, ensure_ascii=False)
+                error_msg += f"\n\n=== DÉTAILS TECHNIQUES (MODE TEST) ===\n{json_debug}"
+            
+            QMessageBox.critical(self, "Erreur", error_msg)
 
     def reset_csv_config_dir(self):
         s.setValue("DourBase/csv_dir", "%INTERNAL%")
