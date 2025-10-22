@@ -104,7 +104,6 @@ class DourBase:
                                                if is_internal_config else
             "Réinitialiser au dossier par défaut changera votre dossier de CSV au dossier interne du plugin, ce qui devrait résoudre le problème.\nToutefois, cela ne corrigera pas le problème dans votre dossier personnalisé.\n\nNote : Vous pouvez également corriger le problème manuellement dans le dossier personalisé des csv. appuyez sur le bouton Afficher les Détails pour voir les problèmes identifiés."}')
 
-
             error_dialog.setDetailedText(error_msg.strip())
 
             if not is_internal_config:
@@ -131,7 +130,8 @@ class DourBase:
                     font-family: monospace;
                 }
             """)
-
+            if not is_internal_config:
+                msg.addButton(QMessageBox.Ok)
             msg.exec_()
             return
 
