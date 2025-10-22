@@ -62,7 +62,6 @@ class DourBase:
 
 
         from .csv_checker import check_csv_files
-        print(get_config_dir())
         result = check_csv_files(get_config_dir())
 
         has_errors = (
@@ -97,7 +96,6 @@ class DourBase:
                         error_msg += f"   • {clean_problem}\n"
                     error_msg += "\n"
             is_internal_config = True if s.value("DourBase/csv_dir", "%INTERNAL%") == "%INTERNAL%" else False
-            print(f"is_internal_config is {is_internal_config} with config {s.value("DourBase/csv_dir", "%INTERNAL%")}")
             error_dialog = QMessageBox()
             error_dialog.setIcon(QMessageBox.Critical)
             error_dialog.setWindowTitle("Erreur de configuration")
