@@ -24,7 +24,15 @@ jobs:
           if [ -f LICENSE.MD ]; then
             cp LICENSE.MD DourBase/LICENSE
           fi
-
+          date_str=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          cat > ./DourBase/build_infos.txt <<EOF
+          Date: $date_str
+          Runner: ${{ runner.os }}
+          Repo: ${{ github.repository }}
+          Ref: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          Branch: ${{ github.ref_name || 'unknown' }}
+          
       - name: Create ZIP archive
         run: zip -r DourBase.zip DourBase/
       - name: Get current date
