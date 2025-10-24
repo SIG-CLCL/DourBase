@@ -1,5 +1,10 @@
+import os
+import logging
 from pathlib import Path
 from typing import Dict, List, Set, Any, Tuple
+
+# Set up logger
+logger = logging.getLogger('DourBase')
 
 REQUIRED_FILES = {
     "DEPCO.csv",
@@ -28,6 +33,7 @@ class CSVChecker:
     def __init__(self, directory: str):
         """Initialise le vérificateur avec le répertoire à vérifier."""
         self.directory = Path(directory)
+        logger.info(f"Initializing CSVChecker for directory: {self.directory}")
         self._reset_state()
     
     def _reset_state(self) -> None:
@@ -44,23 +50,30 @@ class CSVChecker:
         Returns:
             bool: True si tous les fichiers requis sont présents, False sinon
         """
+        logger.debug(f"Checking for required files in: {self.directory}")
         try:
             existing_files = {f.name for f in self.directory.glob("*.csv")}
             self.missing_files = sorted(REQUIRED_FILES - existing_files)
             
-            for file in self.missing_files:
-                self.problems.append(f"Fichier manquant : {file}")
+            if self.missing_files:
+                logger.warning(f"Missing required files: {', '.join(self.missing_files)}")
+                for file in self.missing_files:
+                    problem_msg = f"Missing file: {file}"
+                    self.problems.append(problem_msg)
+            else:
+                logger.debug("All required CSV files are present")
                 
             return len(self.missing_files) == 0
-            
         except Exception as e:
-            raise CSVCheckerError(f"Erreur lors de la vérification des fichiers : {str(e)}")
+            error_msg = f"Error while checking files: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise CSVCheckerError(error_msg) from e
 
     def _validate_depco_content(self, reader) -> List[str]:
         """Valide le contenu spécifique du fichier DEPCO.csv."""
         problems = []
         seen_codes = set()
-        
+        logger.debug("Validating DEPCO.csv content")
         for row_num, row in enumerate(reader, 1):
             if len(row) < 2:
                 problems.append(f"Ligne {row_num} : Format invalide, attendu 'code;libellé'")
@@ -96,6 +109,7 @@ class CSVChecker:
             - Liste des lignes non vides (chacune étant une liste de colonnes)
             - Liste des problèmes détectés (hors lignes vides)
         """
+        logger.debug(f"Reading CSV file: {filepath}")
         problems = []
         lines = []
         
@@ -149,6 +163,7 @@ class CSVChecker:
         Returns:
             List[str]: Liste des problèmes détectés (vide si aucun problème)
         """
+        logger.debug(f"Checking integrity of {filename}")
         problems = []
         filepath = self.directory / filename
         
@@ -248,5 +263,22 @@ def check_csv_files(directory: str) -> Dict[str, Any]:
             - checked_files (List[str])
             - valid_files (List[str])
     """
-    checker = CSVChecker(directory)
-    return checker.run_checks()
+    logger.info(f"Starting CSV file validation in directory: {directory}")
+    try:
+        checker = CSVChecker(directory)
+        result = checker.run_checks()
+        if result.get('success'):
+            logger.info("CSV validation completed successfully")
+        else:
+            logger.warning(f"CSV validation completed with issues: {result.get('list_problems', [])}")
+        return result
+    except Exception as e:
+        logger.error(f"Error during CSV validation: {str(e)}", exc_info=True)
+        return {
+            'success': False,
+            'problems': True,
+            'list_problems': [f"Error during validation: {str(e)}"],
+            'missing_files': [],
+            'checked_files': [],
+            'valid_files': []
+        }

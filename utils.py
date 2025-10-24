@@ -1,35 +1,77 @@
 import csv
 import os
 import logging
-import shutil
-from qgis.core import QgsDataSourceUri
+import logging.handlers
 from qgis.PyQt.QtCore import QSettings
-from PyQt5.QtSql import QSqlDatabase, QSqlQuery
+import os
+import csv
+from qgis.core import QgsDataSourceUri
+from qgis.PyQt.QtSql import QSqlDatabase, QSqlQuery
+import shutil
 
-log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+def setup_logging():
+    """Configure la gestion des logs avec rotation et taille maximale"""
+    logger = logging.getLogger('DourBase')
+    logger.setLevel(logging.DEBUG)
+    
+    # Créer le dossier de logs s'il n'existe pas
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, 'dourbase.log')
+    
+    # Configuration via QSettings
+    s = QSettings()
+    # Taille max d'un fichier de log en Mo (défaut: 5 Mo)
+    log_max_size_mb = int(s.value("DourBase/log_max_size_mb", 5))
+    # Nombre de fichiers de backup à conserver (défaut: 5)
+    log_backup_count = int(s.value("DourBase/log_backup_count", 5))
+    
+    # Configuration du handler avec rotation
+    handler = logging.handlers.RotatingFileHandler(
+        log_file, 
+        maxBytes=log_max_size_mb * 1024 * 1024,  # Convertir en octets
+        backupCount=log_backup_count,
+        encoding='utf-8'
+    )
+    
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    handler.setFormatter(formatter)
+    
+    # Vider les handlers existants pour éviter les doublons
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    
+    logger.addHandler(handler)
+    logger.info("Logging initialisé avec succès")
+    return logger
 
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
-
-logging.basicConfig(
-    filename=os.path.join(log_dir, 'plugin.log'),
-    level=logging.INFO,  # Niveau de log (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Initialisation du logger
+logger = setup_logging()
+logger = logging.getLogger('DourBase')
 
 def get_config_dir():
+    logger.info("[utils] [get_config_dir] Getting configuration directory path")
     s = QSettings()
     if s.value("DourBase/csv_dir", "%INTERNAL%") == "%INTERNAL%":
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config")
+        logger.info(f"[utils] [get_config_dir] Using internal config directory: {path}")
     else:
         path = s.value("DourBase/csv_dir", "%INTERNAL%")
+        logger.info(f"[utils] [get_config_dir] Using custom config directory: {path}")
     return path
 def get_param(param_name):
+    logger.info(f"[utils] [get_param] Getting parameter: {param_name}")
     s = QSettings()
-    return s.value(f"DourBase/{param_name}")
+    value = s.value(f"DourBase/{param_name}")
+    logger.info(f"[utils] [get_param] Parameter value: {value}")
+    return value
 
 def update_file_name(depco, num_source, aep=False, eu=False, epl=False):
+    logger.info(f"[utils] [update_file_name] Generating file name - depco: {depco}, num_source: {num_source}, aep: {aep}, eu: {eu}, epl: {epl}")
     if not aep and not eu and not epl:
+        logger.error("[utils] [update_file_name] No file type specified (aep/eu/epl)")
         raise ValueError("At least one argument (aep/eu/epl) should be True.")
     name = f'{depco}'
     if aep:
@@ -39,9 +81,12 @@ def update_file_name(depco, num_source, aep=False, eu=False, epl=False):
     if epl:
         name += f"{name}_EPL"
     name += "_" + num_source
-    return name.upper()
+    result = name.upper()
+    logger.info(f"[utils] [update_file_name] Generated file name: {result}")
+    return result
 
 def open_config(filename, dir=None):
+    logger.info(f"[utils] [open_config] Opening config file: {filename}, directory: {dir if dir else 'None'}")
     s = QSettings()
     if dir:
         if dir == "config":
@@ -66,56 +111,75 @@ def open_config(filename, dir=None):
             filename
         )
 
-    logging.info(f"[utils] [open_config] filename is : {filename}, dir : {dir}, path : {path}")
+    logger.info(f"[utils] [open_config] filename is : {filename}, dir : {dir}, path : {path}")
     tmp_list = []
     try:
+        logger.info(f"[utils] [open_config] Reading file: {path}")
         with open(path, mode='r', encoding='utf-8-sig') as file:
             reader = csv.reader(file, delimiter=';')
+            row_count = 0
             for row in reader:
                 if len(row) >= 2:
                     try:
                         tmp_list.append((row[1], int(row[0])))
+                        row_count += 1
                     except ValueError as e:
+                        logger.warning(f"[utils] [open_config] Error converting value in row: {e}")
                         tmp_list.append((f"Error : {e}", "ERROR"))
+            logger.info(f"[utils] [open_config] Successfully read {row_count} rows from {filename}")
+    except FileNotFoundError:
+        logger.error(f"[utils] [open_config] Config file not found: {path}")
+        raise
     except Exception as e:
-        print(f"[ERROR] [open_config] : {e}")
+        logger.error(f"[utils] [open_config] Error reading config file: {str(e)}", exc_info=True)
+        raise
     return tmp_list
 
 def check_shapefile_completeness(folder):
+    logger.info(f"[utils] [check_shapefile_completeness] Checking shapefile completeness in: {folder}")
     required_exts = {'.shp', '.shx', '.dbf', '.prj'}
     all_files = os.listdir(folder)
     shapefile_basenames = set(os.path.splitext(f)[0] for f in all_files if f.endswith('.shp'))
+    logger.debug(f"[utils] [check_shapefile_completeness] Found {len(shapefile_basenames)} shapefile(s)")
     missing_files_list = []
 
     for basename in shapefile_basenames:
+        logger.debug(f"[utils] [check_shapefile_completeness] Checking shapefile: {basename}")
         present_exts = {os.path.splitext(f)[1] for f in all_files if os.path.splitext(f)[0] == basename}
         missing_exts = required_exts - present_exts
         for ext in missing_exts:
             missing_files_list.append(f"{basename}{ext}")
+            logger.warning(f"[utils] [check_shapefile_completeness] Missing extension: {ext}")
 
     if missing_files_list:
         if len(missing_files_list) == 1:
             error_message = "Un fichier est manquant :\n" + missing_files_list[0]
         else:
             error_message = "Des fichiers sont manquants :\n" + "\n".join(missing_files_list)
+        logger.error(error_message)
         raise FileNotFoundError(error_message)
     else:
+        logger.info("[utils] [check_shapefile_completeness] All required shapefile components are present")
         return list(shapefile_basenames)
 
 def get_filename_without_extension(filepath):
     """
     Récupère le nom du fichier sans extension à partir d'un chemin complet.
     """
+    logger.info(f"[utils] [get_filename_without_extension] Getting filename without extension from: {filepath}")
     basename = os.path.basename(filepath)
     filename, _ = os.path.splitext(basename)
+    logger.info(f"[utils] [get_filename_without_extension] Filename without extension: {filename}")
     return filename
 
 def get_suffix_after_last_underscore(filepath):
     """
     Récupère la partie après le dernier underscore du nom de fichier (sans extension du coup).
     """
+    logger.info(f"[utils] [get_suffix_after_last_underscore] Getting suffix after last underscore from: {filepath}")
     filename = get_filename_without_extension(filepath)
     suffix = filename.split('_')[-1]
+    logger.info(f"[utils] [get_suffix_after_last_underscore] Suffix after last underscore: {suffix}")
     return suffix
 
 def get_shamas(host, port, database_name, username, password):
@@ -133,7 +197,7 @@ def get_shamas(host, port, database_name, username, password):
     db.setPassword(uri.password())
 
     if db.open():
-        logging.info("Database connection successful!")
+        logger.info("[utils] [get_shamas] Database connection successful!")
 
         query = QSqlQuery(db)
         query.exec_("SELECT schema_name FROM information_schema.schemata")
@@ -141,12 +205,11 @@ def get_shamas(host, port, database_name, username, password):
         schemas = []
         while query.next():
             schemas.append(query.value(0))
-        print(f"Schemas : {schemas}")
-        logging.info(f"Schemas : {schemas}")
+        logger.info(f"[utils] [get_shamas] Schemas : {schemas}")
         db.close()
         return schemas
     else:
-        logging.error("Failed to connect to the database:", db.lastError().text())
+        logger.error(f"[utils] [get_shamas] Failed to connect to the database: {db.lastError().text()}")
         db.close()
         raise Exception(db.lastError().text())
 

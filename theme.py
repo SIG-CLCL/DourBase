@@ -102,7 +102,7 @@ class LightTheme:
                 background-color: #F0F0F0;
                 color: #000000;
             }
-            QCalendarWidget QSpinBox {
+            QCalendarWidget {
                 background-color: #FFFFFF;
                 color: #000000;
                 border: 1px solid #A0A0A0;
@@ -117,6 +117,14 @@ class LightTheme:
             }
             QCalendarWidget QAbstractItemView:disabled {
                 color: #A0A0A0;
+            }
+            QSpinBox::up-button, QDoubleSpinBox::up-button {
+                width: 0px;
+                border: none;
+            }
+            QSpinBox::down-button, QDoubleSpinBox::down-button {
+                width: 0px;
+                border: none;
             }
         """)
 
@@ -172,7 +180,7 @@ class DarkTheme:
                 color: #FFFFFF;
                 border: 1px solid #555555;
             }
-            QCalendarWidget QSpinBox {
+            QCalendarWidget {
                 background-color: #353535;
                 color: #FFFFFF;
                 border: 1px solid #555555;
@@ -188,6 +196,14 @@ class DarkTheme:
             }
             QCalendarWidget QAbstractItemView:disabled {
                 color: #707070;
+            }
+            QSpinBox::up-button, QDoubleSpinBox::up-button {
+                width: 0px;
+                border: none;
+            }
+            QSpinBox::down-button, QDoubleSpinBox::down-button {
+                width: 0px;
+                border: none;
             }
             QCalendarWidget QAbstractItemView:selected {
                 background-color: #2A82DA;
@@ -262,5 +278,6 @@ class DarkTheme:
                 height: 0px;
                 width: 0px;
             }
+
         """)
 

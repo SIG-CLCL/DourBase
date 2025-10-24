@@ -3,6 +3,31 @@ from qgis.PyQt.QtGui import QIcon, QPixmap
 from qgis.PyQt.QtCore import QSettings, QTimer, Qt
 import os
 import time
+import logging
+import sys
+from pathlib import Path
+
+# Configuration du logger
+log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(log_dir, exist_ok=True)
+
+# Création du formateur
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Configuration du handler pour le fichier
+file_handler = logging.FileHandler(os.path.join(log_dir, 'plugin.log'))
+file_handler.setFormatter(formatter)
+file_handler.setLevel(logging.INFO)
+
+# Configuration du logger principal
+logger = logging.getLogger('DourBase')
+logger.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+logger.propagate = True  # Évite la propagation vers le logger racine
+
+# Test message
+logger.info("DourBase logger initialized")
+
 from .dour_base_dialog import DourBaseDialog
 from .theme import DarkTheme, LightTheme
 from .utils import get_config_dir
@@ -11,36 +36,68 @@ s = QSettings()
 
 class DourBase:
     def __init__(self, iface):
+        logger.info("Initializing DourBase")
         self.iface = iface
         self.action = None
         self.dialog = None
+        logger.debug("DourBase initialized successfully")
 
     def initGui(self):
-        plugin_dir = os.path.dirname(__file__)
-        icon_path = os.path.join(plugin_dir, "assets", "icons", "icon.svg")
-        self.action = QAction(QIcon(icon_path),"DourBase", self.iface.mainWindow())
+        logger.info("Initializing GUI")
+        try:
+            plugin_dir = os.path.dirname(__file__)
+            icon_path = os.path.join(plugin_dir, "assets", "icons", "icon.svg")
+            if not os.path.exists(icon_path):
+                logger.warning(f"Icon not found at: {icon_path}")
+            self.action = QAction(QIcon(icon_path), "DourBase", self.iface.mainWindow())
+            logger.debug("Main action created")
+        except Exception as e:
+            logger.error(f"Error initializing interface: {str(e)}", exc_info=True)
+            raise
 
-        self.action.triggered.connect(self.run)
-        self.iface.addToolBarIcon(self.action)
-        self.iface.addPluginToMenu("&DourBase", self.action)
+        try:
+            self.action.triggered.connect(self.run)
+            self.iface.addToolBarIcon(self.action)
+            self.iface.addPluginToMenu("&DourBase", self.action)
+            logger.info("Plugin added to toolbar and menu")
+        except Exception as e:
+            logger.error(f"Error adding plugin to interface: {str(e)}", exc_info=True)
+            raise
 
     def reset_csv_dir(self):
         s.setValue("DourBase/csv_dir", "%INTERNAL%")
 
     def unload(self):
-        self.iface.removeToolBarIcon(self.action)
-        self.iface.removePluginMenu("&DourBase", self.action)
+        logger.info("Unloading plugin")
+        try:
+            self.iface.removeToolBarIcon(self.action)
+            self.iface.removePluginMenu("&DourBase", self.action)
+            logger.info("Plugin removed from interface")
+        except Exception as e:
+            logger.error(f"Error unloading plugin: {str(e)}", exc_info=True)
+            raise
 
     def run(self):
-        valeur = s.value("DourBase/is_first_start", "False")
-        plugin_dir = os.path.dirname(__file__)
-        is_test_mode = s.value("DourBase/is_test_mode", False)
+        logger.info("Starting DourBase plugin")
+        try:
+            valeur = s.value("DourBase/is_first_start", "False")
+            plugin_dir = os.path.dirname(__file__)
+            is_test_mode = s.value("DourBase/is_test_mode", False)
+            logger.debug(f"Test mode: {is_test_mode}, First start: {valeur}")
+        except Exception as e:
+            logger.error(f"Error reading settings: {str(e)}", exc_info=True)
+            raise
 
         if valeur == "False":
+            logger.info("First start detected, showing welcome banner")
             s.setValue("DourBase/is_first_start", "True")
-            # Afficher la bannière pendant 5 secondes
-            banner_dialog = QDialog(self.iface.mainWindow())
-            DarkTheme.apply(banner_dialog)
+            try:
+                # Afficher la bannière pendant 5 secondes
+                banner_dialog = QDialog(self.iface.mainWindow())
+                DarkTheme.apply(banner_dialog)
+                logger.debug("Welcome banner displayed")
+            except Exception as e:
+                logger.error(f"Error displaying welcome banner: {str(e)}", exc_info=True)
             banner_dialog.setWindowFlags(banner_dialog.windowFlags() | Qt.FramelessWindowHint)
             layout = QVBoxLayout()
             label = QLabel()
@@ -99,10 +156,12 @@ class DourBase:
             error_dialog = QMessageBox()
             error_dialog.setIcon(QMessageBox.Critical)
             error_dialog.setWindowTitle("Erreur de configuration")
+            if is_internal_config:
+                message = "Cette erreur provient des fichiers interne du plugin. Réinstaller ou mettre à jour le plugin devrait corriger le problème."
+            else:
+                message = "Réinitialiser au dossier par défaut changera votre dossier de CSV au dossier interne du plugin, ce qui devrait résoudre le problème.\nToutefois, cela ne corrigera pas le problème dans votre dossier personnalisé.\n\nNote : Vous pouvez également corriger le problème manuellement dans le dossier personalisé des csv. appuyez sur le bouton Afficher les Détails pour voir les problèmes identifiés."
             error_dialog.setText("Impossible de démarrer le plugin :")
-            error_dialog.setInformativeText(f'Des problèmes ont été détectés dans les fichiers de configuration.\n\n{"Cette erreur provient des fichiers interne du plugin. Réinstaller ou mettre à jour le plugin devrait corriger le problème."
-                                               if is_internal_config else
-            "Réinitialiser au dossier par défaut changera votre dossier de CSV au dossier interne du plugin, ce qui devrait résoudre le problème.\nToutefois, cela ne corrigera pas le problème dans votre dossier personnalisé.\n\nNote : Vous pouvez également corriger le problème manuellement dans le dossier personalisé des csv. appuyez sur le bouton Afficher les Détails pour voir les problèmes identifiés."}')
+            error_dialog.setInformativeText(f'Des problèmes ont été détectés dans les fichiers de configuration.\n\n{message}')
 
             error_dialog.setDetailedText(error_msg.strip())
 
@@ -114,7 +173,7 @@ class DourBase:
             if is_test_mode:
                 import json
                 json_debug = json.dumps(result, indent=2, ensure_ascii=False)
-                test_details = "\n\n=== DÉTAILS TECHNIQUES (MODE TEST) ===\n"
+                test_details = "\n\n=== TECHNICAL DETAILS (TEST MODE) ===\n"
                 test_details += json_debug
                 error_dialog.setDetailedText(f"{error_msg.strip()}{test_details}")
 
@@ -143,8 +202,19 @@ class DourBase:
         else:
             DarkTheme.apply(self.dialog)
             
+        try:
+            if not self.dialog:
+                logger.debug("Creating a new instance of DourBaseDialog")
+                self.dialog = DourBaseDialog(self.iface)
+            self.dialog.show()
+            logger.info("Main window displayed")
+        except Exception as e:
+            logger.error(f"Error displaying main window: {str(e)}", exc_info=True)
+            QMessageBox.critical(
+                self.iface.mainWindow(),
+                "Error",
+                f"Failed to open DourBase: {str(e)}"
+            )
         self.dialog.resize(400, 600)
-        self.dialog.show()
         self.dialog.raise_()
         self.dialog.activateWindow()
-

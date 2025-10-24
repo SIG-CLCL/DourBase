@@ -13,7 +13,7 @@ import qgis
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QLineEdit, QLabel, QCheckBox, QComboBox, QHBoxLayout, QPushButton, QMessageBox,
     QDateEdit, QScrollArea, QWidget, QFileDialog, QInputDialog, QTabWidget, QSpacerItem, QSizePolicy,
-    QFormLayout, QDialogButtonBox, QGroupBox, QTextEdit, QFrame
+    QFormLayout, QDialogButtonBox, QGroupBox, QTextEdit, QFrame, QSpinBox
 )
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtCore import QDate, QSettings, Qt, QSize, QCoreApplication
@@ -24,7 +24,11 @@ import psycopg2
 from qgis.core import QgsSettings, QgsDataSourceUri, QgsVectorLayer
 from .utils import update_file_name, open_config, check_shapefile_completeness, get_shamas, \
     get_filename_without_extension, get_suffix_after_last_underscore, main_prepare_shapefiles, get_param
-is_test_mode = False
+
+import logging
+logger = logging.getLogger('DourBase')
+
+is_test_mode = True
 s = QSettings()
 # s.setValue("plugin/key", "value")
 # valeur = s.value("plugin/key", "def_value")
@@ -48,6 +52,8 @@ def save_logs(console_logs, parent=None, import_dir=None):
         # Récupération du paramètre avec get_param et gestion des erreurs
         log_setting = get_param("logs")
         log_setting = int(log_setting) if log_setting is not None else 2
+        logger.info(f"[save_logs] Log setting: {log_setting}")
+
     except (ValueError, TypeError):
         log_setting = 2  # Valeur par défaut en cas d'erreur
     
@@ -56,13 +62,13 @@ def save_logs(console_logs, parent=None, import_dir=None):
     
     # S'assurer que les logs ne sont pas vides
     if not console_logs or not isinstance(console_logs, str):
-        logging.warning("Aucun contenu à logger")
+        logger.warning("[save_logs] Aucun contenu à logger")
         return None
     
     # Mode 1: Enregistrement automatique
     if log_setting == 1:
         if not import_dir or not os.path.isdir(import_dir):
-            logging.warning(f"Dossier d'import invalide pour les logs: {import_dir}")
+            logger.warning(f"[save_logs] Dossier d'import invalide pour les logs: {import_dir}")
             return None
             
         try:
@@ -72,11 +78,11 @@ def save_logs(console_logs, parent=None, import_dir=None):
             with open(filename, "w", encoding="utf-8") as f:
                 f.write("Compte rendu du traitement :\n\n" + console_logs)
             
-            logging.info(f"Logs enregistrés automatiquement dans : {filename}")
+            logger.info(f"[save_logs] Logs enregistrés automatiquement dans : {filename}")
             return filename
             
         except Exception as e:
-            logging.error(f"Erreur lors de l'enregistrement automatique des logs: {str(e)}")
+            logger.error(f"[save_logs] Erreur lors de l'enregistrement automatique des logs: {str(e)}")
             # Fallback au mode proposition si échec
             log_setting = 2
     
@@ -97,11 +103,11 @@ def save_logs(console_logs, parent=None, import_dir=None):
                 with open(filename, "w", encoding="utf-8") as f:
                     f.write("Compte rendu du traitement :\n\n" + console_logs)
                 
-                logging.info(f"Logs enregistrés dans : {filename}")
+                logger.info(f"[save_logs] Logs enregistrés dans : {filename}")
                 return filename
                 
         except Exception as e:
-            logging.error(f"Erreur lors de l'enregistrement manuel des logs: {str(e)}")
+            logger.error(f"[save_logs] Erreur lors de l'enregistrement manuel des logs: {str(e)}")
             if parent:
                 QMessageBox.critical(
                     parent,
@@ -275,8 +281,8 @@ class DourBaseDialog(QDialog):
 
         self.combo_exploitant = QComboBox()
         options = sorted(open_config("EXPLOITANT.csv", "config"), key=lambda x: int(x[1]))
+        logger.info(f"[DourBaseDialog] options in EXPLOITANT.csv are: {options}")
         for opt in options:
-            logging.info(f"the option is {opt}")
             self.combo_exploitant.addItem(f"{opt[0]} ({opt[1]})",  opt[1])
         self.content_layout.addWidget(QLabel("Exploitant :"))
         combo_exploitant_layout = QHBoxLayout()
@@ -286,8 +292,8 @@ class DourBaseDialog(QDialog):
 
         self.combo_depco = QComboBox()
         options = sorted(open_config("DEPCO.csv", "config"), key=lambda x: int(x[1]))
+        logger.info(f"[DourBaseDialog] options in DEPCO.csv are: {options}")
         for opt in options:
-            logging.info(f"the option is {opt}")
             self.combo_depco.addItem(f"{opt[0]} ({opt[1]})", (opt[0], opt[1]))
         self.content_layout.addWidget(QLabel("Commune (DEPCO) :"))
         combo_depco_layout = QHBoxLayout()
@@ -338,8 +344,8 @@ class DourBaseDialog(QDialog):
 
         self.combo_entreprise = QComboBox()
         options = sorted(open_config("ENTREPRISE.csv", "config"), key=lambda x: int(x[1]))
+        logger.info(f"[DourBaseDialog] options in ENTREPRISE.csv are: {options}")
         for opt in options:
-            logging.info(f"the option is {opt}")
             self.combo_entreprise.addItem(f"{opt[0]} ({opt[1]})", (opt[0], opt[1]))
         self.content_layout.addWidget(QLabel("Entreprise :"))
         combo_entreprise_layout = QHBoxLayout()
@@ -376,8 +382,8 @@ class DourBaseDialog(QDialog):
 
         self.combo_etat = QComboBox()
         options = sorted(open_config("ETAT.csv", "config"), key=lambda x: int(x[1]))
+        logger.info(f"[DourBaseDialog] options in ETAT.csv are: {options}")
         for opt in options:
-            logging.info(f"the option is {opt}")
             self.combo_etat.addItem(f"{opt[0]} ({opt[0]})", (opt[0], opt[0]))
         self.content_layout.addWidget(QLabel("Type de support :"))
         combo_etat_layout = QHBoxLayout()
@@ -387,8 +393,8 @@ class DourBaseDialog(QDialog):
 
         self.combo_support = QComboBox()
         options = sorted(open_config("Q_SUPPORT.csv", "config"), key=lambda x: int(x[1]))
+        logger.info(f"[DourBaseDialog] options in Q_SUPPORT.csv are: {options}")
         for opt in options:
-            logging.info(f"the option is {opt}")
             self.combo_support.addItem(f"{opt[0]} ({opt[0]})", (opt[0], opt[0]))
         self.content_layout.addWidget(QLabel("Qualité du support :"))
         combo_support_layout = QHBoxLayout()
@@ -406,8 +412,8 @@ class DourBaseDialog(QDialog):
 
         self.combo_moa = QComboBox()
         options = sorted(open_config("MOA.csv", "config"), key=lambda x: int(x[1]))
+        logger.info(f"[DourBaseDialog] options in MOA.csv are: {options}")
         for opt in options:
-            logging.info(f"the option is {opt}")
             self.combo_moa.addItem(f"{opt[0]} ({opt[1]})", opt[1])
         self.content_layout.addWidget(QLabel("MOA :"))
         combo_moa_layout = QHBoxLayout()
@@ -635,7 +641,7 @@ class DourBaseDialog(QDialog):
         self.param_layout.addWidget(separator)
 
         # Section Logs
-        self.options_de_journalisation = (QLabel("<b>Options de journalisation</b>"))
+        self.options_de_journalisation = (QLabel("<b>Options de journalisation :</b>"))
         self.param_layout.addWidget(self.options_de_journalisation)
         self.log_combo = QComboBox()
         self.log_combo.addItem("1 - Enregistrement automatique des logs", 1)
@@ -651,16 +657,51 @@ class DourBaseDialog(QDialog):
         self.log_combo.currentIndexChanged.connect(self.save_log_setting)
         self.param_layout.addWidget(QLabel("Comportement des logs :"))
         self.param_layout.addWidget(self.log_combo)
+       
+        # Mets à jour l’affichage du chemin
+        self.update_dir_path_display()
+        
+        # Séparateur
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        self.param_layout.addWidget(separator)
+
+        # Ajout des contrôles de gestion des logs
+        self.options_de_logs = (QLabel("<b>Options de logs :</b>"))
+        self.param_layout.addWidget(self.options_de_logs)
+        
+        # Taille max des fichiers de log (en Mo)
+        log_size_layout = QHBoxLayout()
+        log_size_layout.addWidget(QLabel("Taille max d'un fichier de log (Mo) :"))
+        log_size_layout.addStretch()
+        
+        self.log_max_size = QSpinBox(self)
+        self.log_max_size.setMinimum(1)
+        self.log_max_size.setMaximum(10)
+        self.log_max_size.setValue(int(get_param("log_max_size_mb") or 5))
+        self.log_max_size.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.log_max_size.valueChanged.connect(self.apply_log_settings)
+        log_size_layout.addWidget(self.log_max_size, 0, Qt.AlignRight)
+        self.param_layout.addLayout(log_size_layout)
+        
+        # Nombre de fichiers de backup
+        backup_count_layout = QHBoxLayout()
+        backup_count_layout.addWidget(QLabel("Nombre de fichiers de backup :"))
+        backup_count_layout.addStretch()
+        
+        self.log_backup_count = QSpinBox(self)
+        self.log_backup_count.setMinimum(1)
+        self.log_backup_count.setMaximum(10)
+        self.log_backup_count.setValue(int(get_param("log_backup_count") or 5))
+        self.log_backup_count.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.log_backup_count.valueChanged.connect(self.apply_log_settings)
+        backup_count_layout.addWidget(self.log_backup_count, 0, Qt.AlignRight)
+        self.param_layout.addLayout(backup_count_layout)
         
         # Ajoute un espace extensible en bas pour forcer l'alignement en haut
         self.param_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        # Mets à jour l’affichage du chemin
-        self.update_dir_path_display()
-        
-        # Ajout d'un espacement
-        self.param_layout.addSpacing(20)
-        
         # Lien vers les issues GitHub
         label = QLabel(
             'Pour tout bug, erreur, question ou autre, n\'hésitez pas à ouvrir une issue sur le repo GitHub du plugin : '
@@ -739,6 +780,7 @@ class DourBaseDialog(QDialog):
         self.tabs.setCurrentIndex(self.console_tab_index)
 
     def log_to_console(self, message):
+        logger.info(f"[DourBaseDialog] [log_to_console] {message}")
         # Détection du niveau de log et application de la couleur
         color = None
         html_message = message
@@ -986,6 +1028,25 @@ class DourBaseDialog(QDialog):
         s.setValue("DourBase/csv_dir", "%INTERNAL%")
         self.update_dir_path_display()
         QMessageBox.information(self, "Succès", "Dossier réinitialisé avec succès.\nLes modifications prendront effet après un redémarrage")
+
+    def apply_log_settings(self):
+        """Applique les paramètres des logs"""
+        try:
+            max_size = self.log_max_size.value()
+            backup_count = self.log_backup_count.value()
+            if not (1 <= max_size <= 99) or not (1 <= backup_count <= 10):
+                return
+            
+            s.setValue("DourBase/log_max_size_mb", max_size)
+            s.setValue("DourBase/log_backup_count", backup_count)
+            
+            status_msg = f"Paramètres des logs mis à jour : {max_size} Mo, {backup_count} fichiers"
+            logger.info(f"[DourBaseDialog] [apply_log_settings] {status_msg}")
+            
+        except ValueError as e:
+            logger.error(f"[DourBaseDialog] [apply_log_settings] Valeur invalide : {str(e)}")
+        except Exception as e:
+            logger.error(f"[DourBaseDialog] [apply_log_settings] Erreur lors de la mise à jour des paramètres des logs: {str(e)}")
 
     def change_theme(self):
         """Change le thème de l'application en fonction de la sélection"""
