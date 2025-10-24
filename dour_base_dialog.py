@@ -16,7 +16,8 @@ from qgis.PyQt.QtWidgets import (
     QFormLayout, QDialogButtonBox, QGroupBox, QTextEdit, QFrame, QSpinBox
 )
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtCore import QDate, QSettings, Qt, QSize, QCoreApplication
+from qgis.PyQt.QtCore import QDate, QSettings, Qt, QSize, QCoreApplication, QRegExp, QTimer
+from datetime import datetime
 from qgis.PyQt.QtGui import QPalette, QColor, QIcon, QPixmap, QIntValidator
 
 from osgeo import ogr
@@ -702,6 +703,12 @@ class DourBaseDialog(QDialog):
         # Ajoute un espace extensible en bas pour forcer l'alignement en haut
         self.param_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
+        # Bouton d'export des données
+        self.export_btn = QPushButton("Exporter les données du plugin")
+        self.export_btn.setToolTip("Exporte les logs, paramètres et informations du plugin dans un fichier ZIP")
+        self.export_btn.clicked.connect(self.export_plugin_data)
+        self.param_layout.addWidget(self.export_btn)
+        
         # Lien vers les issues GitHub
         label = QLabel(
             'Pour tout bug, erreur, question ou autre, n\'hésitez pas à ouvrir une issue sur le repo GitHub du plugin : '
@@ -1028,6 +1035,44 @@ class DourBaseDialog(QDialog):
         s.setValue("DourBase/csv_dir", "%INTERNAL%")
         self.update_dir_path_display()
         QMessageBox.information(self, "Succès", "Dossier réinitialisé avec succès.\nLes modifications prendront effet après un redémarrage")
+
+    def export_plugin_data(self):
+        """Exporte les données du plugin (logs, build infos, configs) dans un fichier ZIP"""
+        from .core.export_utils import export_plugin_data
+        from qgis.PyQt.QtWidgets import QFileDialog
+        from qgis.PyQt.QtCore import QDir
+        
+        zip_path = export_plugin_data(self)
+        
+        if zip_path:
+            save_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Enregistrer l'export",
+                QDir.homePath() + f"/dourbase_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                "Fichiers ZIP (*.zip)"
+            )
+            
+            if save_path:
+                try:
+                    import shutil
+                    shutil.copy2(zip_path, save_path)
+                    
+                    QMessageBox.information(
+                        self,
+                        "Export réussi",
+                        f"Les données du plugin ont été exportées avec succès vers :\n{save_path}"
+                    )
+                except Exception as e:
+                    QMessageBox.critical(
+                        self,
+                        "Erreur",
+                        f"Impossible d'enregistrer le fichier :\n{str(e)}"
+                    )
+                finally:
+                    try:
+                        os.remove(zip_path)
+                    except:
+                        pass
 
     def apply_log_settings(self):
         """Applique les paramètres des logs"""
