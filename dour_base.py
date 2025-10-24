@@ -17,7 +17,7 @@ class DourBase:
 
     def initGui(self):
         plugin_dir = os.path.dirname(__file__)
-        icon_path = os.path.join(plugin_dir, 'icon.svg')
+        icon_path = os.path.join(plugin_dir, "assets", "icons", "icon.svg")
         self.action = QAction(QIcon(icon_path),"DourBase", self.iface.mainWindow())
 
         self.action.triggered.connect(self.run)
@@ -44,7 +44,7 @@ class DourBase:
             banner_dialog.setWindowFlags(banner_dialog.windowFlags() | Qt.FramelessWindowHint)
             layout = QVBoxLayout()
             label = QLabel()
-            pixmap = QPixmap(os.path.join(plugin_dir, "banner.png"))
+            pixmap = QPixmap(os.path.join(plugin_dir, "assets", "pictures", "banner.png"))
             label.setPixmap(pixmap)
             label.setAlignment(Qt.AlignCenter)
             layout.addWidget(label)

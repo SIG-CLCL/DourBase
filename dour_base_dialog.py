@@ -143,7 +143,7 @@ class MessagesBoxes:
 
             msg.setText(message)
         msg.addButton(QMessageBox.Ok)
-        msg.setIconPixmap(QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)),"error.svg")))
+        msg.setIconPixmap(QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)),"assets", "icons","error.svg")))
         msg.exec_()
 
     def succes(self, title, message, savelog:bool, console_logs=None, folder=None):
@@ -184,7 +184,7 @@ class MessagesBoxes:
             
         msg.setText(message)
         msg.addButton(QMessageBox.Ok)
-        msg.setIconPixmap(QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)), "succes.svg")))
+        msg.setIconPixmap(QPixmap(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icons", "succes.svg")))
         msg.exec_()
 
 class LoginDialog(QDialog):
@@ -210,7 +210,7 @@ class LoginDialog(QDialog):
 
 def help_icon_widget(tooltip_text):
     plugin_dir = os.path.dirname(__file__)
-    help_icon_path = os.path.join(plugin_dir, 'help.png')
+    help_icon_path = os.path.join(plugin_dir, "assets", "icons", "help.png")
     label = QLabel()
     pixmap = QPixmap(help_icon_path).scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation)
     label.setPixmap(pixmap)
@@ -454,19 +454,19 @@ class DourBaseDialog(QDialog):
 
             self.run_aep_button = QPushButton()
             self.run_aep_button.clicked.connect(self.run_aep)
-            self.run_aep_button.setIcon(QIcon(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'iconn1.png')))
+            self.run_aep_button.setIcon(QIcon(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icons", "iconn1.png")))
             self.run_aep_button.setIconSize(QSize(25, 25))
             self.identifiants_geodis_group_layout.addWidget(self.run_aep_button)
 
             self.run_epl_button = QPushButton()
             self.run_epl_button.clicked.connect(self.run_epl)
-            self.run_epl_button.setIcon(QIcon(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'iconn2.png')))
+            self.run_epl_button.setIcon(QIcon(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icons", "iconn2.png")))
             self.run_epl_button.setIconSize(QSize(25, 25))
             self.identifiants_geodis_group_layout.addWidget(self.run_epl_button)
 
             self.run_eu_button = QPushButton()
             self.run_eu_button.clicked.connect(self.run_eu)
-            self.run_eu_button.setIcon(QIcon(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'iconn3.png')))
+            self.run_eu_button.setIcon(QIcon(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icons", "iconn3.png")))
             self.run_eu_button.setIconSize(QSize(25, 25))
             self.identifiants_geodis_group_layout.addWidget(self.run_eu_button)
 
