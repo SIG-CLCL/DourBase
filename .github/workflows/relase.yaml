@@ -32,7 +32,10 @@ jobs:
           Ref: ${{ github.ref }}
           SHA: ${{ github.sha }}
           Branch: ${{ github.ref_name || 'unknown' }}
-          
+
+      - name: Clean up xcf files
+        run: find DourBase -type f -name "*.xcf" -delete
+  
       - name: Create ZIP archive
         run: zip -r DourBase.zip DourBase/
       - name: Get current date
@@ -49,3 +52,4 @@ jobs:
           files: DourBase.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
