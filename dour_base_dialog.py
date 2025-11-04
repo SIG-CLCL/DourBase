@@ -578,9 +578,17 @@ class DourBaseDialog(QDialog):
         ############################################################
 
 
-        self.param_widget = QWidget()
-        self.param_layout = QVBoxLayout(self.param_widget)
+        self.param_content_widget = QWidget()
+        self.param_layout = QVBoxLayout(self.param_content_widget)
         self.param_layout.setAlignment(Qt.AlignTop)
+        
+        self.param_scroll = QScrollArea()
+        self.param_scroll.setWidgetResizable(True)
+        self.param_scroll.setWidget(self.param_content_widget)
+        
+        self.param_widget = QWidget()
+        param_main_layout = QVBoxLayout(self.param_widget)
+        param_main_layout.addWidget(self.param_scroll)
 
         # Section Thème
         self.param_layout.addWidget(QLabel("<b>Thème de l'interface :</b>"))
@@ -669,7 +677,7 @@ class DourBaseDialog(QDialog):
         self.param_layout.addWidget(separator)
 
         # Ajout des contrôles de gestion des logs
-        self.options_de_logs = (QLabel("<b>Options de logs :</b>"))
+        self.options_de_logs = (QLabel("<b>Options de journalisation du plugin :</b>"))
         self.param_layout.addWidget(self.options_de_logs)
         
         # Taille max des fichiers de log (en Mo)
