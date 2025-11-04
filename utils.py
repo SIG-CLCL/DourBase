@@ -9,6 +9,12 @@ from qgis.core import QgsDataSourceUri
 from qgis.PyQt.QtSql import QSqlDatabase, QSqlQuery
 import shutil
 
+def get_plugin_version():
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "metadata.txt"), "r") as f:
+        for line in f:
+            if line.startswith("version="):
+                return line.split("=")[1].strip()
+    return "Unknown"
 def setup_logging():
     """Configure la gestion des logs avec rotation et taille maximale"""
     logger = logging.getLogger('DourBase')

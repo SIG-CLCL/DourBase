@@ -589,11 +589,31 @@ class DourBaseDialog(QDialog):
         self.param_widget = QWidget()
         param_main_layout = QVBoxLayout(self.param_widget)
         param_main_layout.addWidget(self.param_scroll)
+        
+        self.tabs.addTab(self.param_widget, "Configuration")
+        header_widget = QWidget()
+        header_layout = QVBoxLayout(header_widget)
+        header_layout.setAlignment(Qt.AlignCenter)
+        icon_label = QLabel()
+        icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icons", "icon.svg")
+        pixmap = QPixmap(icon_path)
+        if not pixmap.isNull():
+            pixmap = pixmap.scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            icon_label.setPixmap(pixmap)
+        header_layout.addWidget(icon_label)
+        
+        from .utils import get_plugin_version
+        version_label = QLabel(f"Version {get_plugin_version()}")
+        version_label.setStyleSheet("color: #666666; font-size: 10px;")
+        header_layout.addWidget(version_label)
+        
+        self.param_layout.addWidget(header_widget)
+        
+        self.param_layout.addSpacing(10)
 
         # Section Thème
         self.param_layout.addWidget(QLabel("<b>Thème de l'interface :</b>"))
         
-        # Sélecteur de thème
         self.theme_combo = QComboBox()
         self.theme_combo.addItem("Clair", "light")
         self.theme_combo.addItem("Sombre", "dark")
