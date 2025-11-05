@@ -88,7 +88,7 @@ class DourBase:
             logger.error(f"Error reading settings: {str(e)}", exc_info=True)
             raise
 
-        if valeur == "False":
+        if not valeur:
             logger.info("First start detected, showing welcome banner")
             s.setValue("DourBase/is_first_start", "True")
             try:
