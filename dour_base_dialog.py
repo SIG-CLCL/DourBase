@@ -265,6 +265,78 @@ class DourBaseDialog(QDialog):
         
         self.update_deploy_button_state()
         
+    def refresh_dev_settings(self):
+        """Rafraîchit l'affichage des paramètres de développement"""
+        if not hasattr(self, 'settings_text'):
+            return
+            
+        settings = QSettings()
+        settings.beginGroup("DourBase")
+        
+        all_settings = []
+        for key in settings.allKeys():
+            value = settings.value(key)
+            all_settings.append(f"{key} = {value}")
+        
+        settings.endGroup()
+        
+        self.settings_text.setPlainText("\n".join(sorted(all_settings)))
+    
+    def edit_parameter(self):
+        """Ouvre une boîte de dialogue pour modifier un paramètre"""
+        settings = QSettings()
+        settings.beginGroup("DourBase")
+        params = settings.allKeys()
+        settings.endGroup()
+        
+        if not params:
+            QMessageBox.information(self, "Aucun paramètre", "Aucun paramètre n'est défini.")
+            return
+        
+        param, ok = QInputDialog.getItem(
+            self, 
+            "Modifier un paramètre", 
+            "Sélectionnez le paramètre à modifier:", 
+            params, 
+            0, 
+            False
+        )
+        
+        if not ok or not param:
+            return
+        
+        current_value = s.value(f"DourBase/{param}", "")
+        
+        new_value, ok = QInputDialog.getText(
+            self,
+            f"Modifier {param}",
+            f"Nouvelle valeur pour {param}:",
+            QLineEdit.Normal,
+            str(current_value)
+        )
+        
+        if ok and new_value is not None:
+            if new_value.lower() in ('true', 'false'):
+                new_value = new_value.lower() == 'true'
+            elif new_value.isdigit():
+                new_value = int(new_value)
+            
+            s.setValue(f"DourBase/{param}", new_value)
+            self.refresh_dev_settings()
+            
+            if param == "is_test_mode":
+                global is_test_mode
+                is_test_mode = bool(new_value)
+                self.update_deploy_button_state()
+                
+            QMessageBox.information(
+                self,
+                "Redémarrage nécessaire",
+                "Le paramètre a été modifié.\n\n"
+                "Veuillez redémarrer le plugin pour que les changements prennent effet.",
+                QMessageBox.Ok
+            )
+        
     def __init__(self, parent=None):
         super().__init__(parent)
         self.backup_consultation_path = None
@@ -777,11 +849,33 @@ class DourBaseDialog(QDialog):
         # Ajoute un espace extensible en bas pour forcer l'alignement en haut
         self.param_layout.addSpacerItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
-        # Bouton d'export des données
         self.export_btn = QPushButton("Exporter les données du plugin")
         self.export_btn.setToolTip("Exporte les logs, paramètres et informations du plugin dans un fichier ZIP")
         self.export_btn.clicked.connect(self.export_plugin_data)
         self.param_layout.addWidget(self.export_btn)
+        
+        self.dev_group = QGroupBox("🔧 Développement")
+        self.dev_layout = QVBoxLayout()
+        self.dev_group.setLayout(self.dev_layout)
+        self.dev_group.setVisible(False)
+        
+        self.settings_text = QTextEdit()
+        self.settings_text.setReadOnly(True)
+        self.settings_text.setMaximumHeight(150)
+        self.dev_layout.addWidget(self.settings_text)
+        
+        self.refresh_btn = QPushButton("Rafraîchir")
+        self.refresh_btn.clicked.connect(self.refresh_dev_settings)
+        
+        self.edit_param_btn = QPushButton("Modifier un paramètre")
+        self.edit_param_btn.clicked.connect(self.edit_parameter)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(self.refresh_btn)
+        btn_layout.addWidget(self.edit_param_btn)
+        self.dev_layout.addLayout(btn_layout)
+        
+        self.param_layout.addWidget(self.dev_group)
         
         # Lien vers les issues GitHub
         label = QLabel(
@@ -925,7 +1019,12 @@ class DourBaseDialog(QDialog):
     def update_deploy_button_state(self):
         if is_test_mode:
             self.deploy_button.setEnabled(True)
+            if hasattr(self, 'dev_group'):
+                self.dev_group.setVisible(True)
+                self.refresh_dev_settings()
             return
+        elif hasattr(self, 'dev_group'):
+            self.dev_group.setVisible(False)
         # 1. Vérifier que les champs utilisateur et mot de passe ne sont pas vides
         username_valid = bool(self.db_username.text().strip())
         password_valid = bool(self.db_password.text())
