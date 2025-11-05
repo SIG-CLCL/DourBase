@@ -29,8 +29,9 @@ from .utils import update_file_name, open_config, check_shapefile_completeness, 
 import logging
 logger = logging.getLogger('DourBase')
 
-is_test_mode = True
 s = QSettings()
+is_test_mode = s.value("DourBase/is_test_mode", False)
+
 # s.setValue("plugin/key", "value")
 # valeur = s.value("plugin/key", "def_value")
 
@@ -230,6 +231,39 @@ class DourBaseDialog(QDialog):
         """Sauvegarde le paramètre de log sélectionné"""
         log_setting = self.log_combo.currentData()
         s.setValue("DourBase/logs", str(log_setting))
+        
+    def on_version_clicked(self, event):
+        """Gère les clics sur le numéro de version pour activer/désactiver le mode test"""
+        current_time = time.time()
+        
+        if current_time - self.last_click_time > 1.0:
+            self.version_click_count = 0
+        
+        self.version_click_count += 1
+        self.last_click_time = current_time
+        
+        if self.version_click_count >= 5:
+            self.toggle_test_mode()
+            self.version_click_count = 0
+    
+    def toggle_test_mode(self):
+        """Bascule l'état du mode test et affiche une notification"""
+        current_mode = s.value("DourBase/is_test_mode", False, type=bool)
+        new_mode = not current_mode
+        s.setValue("DourBase/is_test_mode", new_mode)
+        
+        global is_test_mode
+        is_test_mode = new_mode
+        
+        mode_text = "activé" if new_mode else "désactivé"
+        QMessageBox.information(
+            self,
+            "Mode Test",
+            f"Le mode test a été {mode_text}.",
+            QMessageBox.Ok
+        )
+        
+        self.update_deploy_button_state()
         
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -603,9 +637,21 @@ class DourBaseDialog(QDialog):
         header_layout.addWidget(icon_label)
         
         from .utils import get_plugin_version
-        version_label = QLabel(f"Version {get_plugin_version()}")
-        version_label.setStyleSheet("color: #666666; font-size: 10px;")
-        header_layout.addWidget(version_label)
+        
+        # Création du label de version avec un nom d'objet pour le style
+        self.version_label = QLabel(f"Version {get_plugin_version()}")
+        self.version_label.setStyleSheet("""
+            color: #666666; 
+            font-size: 10px;
+        """)
+        
+        # Variables pour le comptage des clics
+        self.version_click_count = 0
+        self.last_click_time = 0
+        
+        # Activer le suivi des clics de souris
+        self.version_label.mousePressEvent = self.on_version_clicked
+        header_layout.addWidget(self.version_label)
         
         self.param_layout.addWidget(header_widget)
         
