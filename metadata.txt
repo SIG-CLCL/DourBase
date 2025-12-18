@@ -12,6 +12,6 @@ repository=https://github.com/SIG-CLCL/DourBase
 tracker=https://github.com/SIG-CLCL/DourBase/issues
 
 changelog=
-      1.4
-        * Gestion des erreurs dans les fichiers des CSV au démarrage ainsi qu'à la configuration du dossier personalisé
+      1.5
+        * Ajout d'un système d'exportation des données du plugin pour le debug.
 
