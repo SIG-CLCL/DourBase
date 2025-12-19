@@ -13,5 +13,6 @@ tracker=https://github.com/SIG-CLCL/DourBase/issues
 
 changelog=
       1.5
-        * Ajout d'un système d'exportation des données du plugin pour le debug.
-
+        * Ajout d'un système d'exportation des données du plugin pour le debug ;
+        * Ajout d'un système de logs ;
+        * Réorganisation des fichiers du plugin ; 
