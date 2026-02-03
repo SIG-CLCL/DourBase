@@ -1376,7 +1376,10 @@ class DourBaseDialog(QDialog):
             port=database["port"]
         )
         cur = conn.cursor()
-        query = f'SELECT COUNT(*) FROM "{schema}"."{table}"'
+        query = 'SELECT COUNT(*) FROM "{}"."{}"'.format(
+            psycopg2.extensions.quote_ident(schema, conn),
+            psycopg2.extensions.quote_ident(table, conn)
+        )
         cur.execute(query)
         count = cur.fetchone()[0]
         cur.close()
@@ -1445,9 +1448,23 @@ class DourBaseDialog(QDialog):
             "password=[PASSWORD HIDDEN FOR SECURITY REASONS]"
         )
 
-        os.system(command)
-        self.log_to_console(f"[INFO] Command executed {safe_command}.")
-        print(safe_command)
+        try:
+            result = subprocess.run(
+                ["ogr2ogr.exe", "-f", "PostgreSQL", 
+                 f"PG:dbname='{database['dbname']}' host={database['host']} port={database['port']} sslmode=disable user={database['user']} password={password}",
+                 "-lco", "DIM=2", shpfile, get_filename_without_extension(shpfile),
+                 "-append", "-lco", "GEOMETRY_NAME=geom", "-lco", f"FID=ID_{get_suffix_after_last_underscore(shpfile)}",
+                 "-nln", f"{database['schema']}.{layer_name}", "-a_srs", "EPSG:2154"] + 
+                 (["-nlt", nlt_arg.split()[1]] if nlt_arg else []),
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            self.log_to_console(f"[INFO] Command executed {safe_command}.")
+            print(safe_command)
+        except subprocess.CalledProcessError as e:
+            self.log_to_console(f"[ERROR] Error executing ogr2ogr: {e.stderr}")
+            raise
 
         # 2. Compter après import
         count_after = self.count_features_in_db(database, database['schema'], layer_name)
@@ -1534,7 +1551,7 @@ class DourBaseDialog(QDialog):
             file_name = os.path.join(plugins_dir, "RsxIndent.zip")
 
             # 1. Télécharger le fichier ZIP
-            response = requests.get(download_link, verify=certifi.where())
+            response = requests.get(download_link, verify=certifi.where(), timeout=30)
             if response.status_code == 200:
                 with open(file_name, "wb") as file:
                     file.write(response.content)
@@ -1701,7 +1718,9 @@ class DourBaseDialog(QDialog):
                     return
 
                 cursor.execute(
-                    f"SELECT 1 FROM {database['schema']}.basedoc WHERE id_source = %s",
+                    'SELECT 1 FROM {}.basedoc WHERE id_source = %s'.format(
+                        psycopg2.extensions.quote_ident(database['schema'], conn)
+                    ),
                     (id_source,)
                 )
                 exists = cursor.fetchone() is not None
@@ -1872,8 +1891,8 @@ class DourBaseDialog(QDialog):
                     port=database["port"]
                 )
 
-                sql = f"""
-                INSERT INTO {database["schema"]}.basedoc(
+                sql = """
+                INSERT INTO {}.basedoc(
                     id_source,
                     depco,
                     no_origine,
@@ -1892,29 +1911,18 @@ class DourBaseDialog(QDialog):
                     nom_fich,
                     utilisat)
                 VALUES (
-                    '{id_source}',
-                    '{depco}',
-                    '{no_origine}',
-                    '{aep}',
-                    '{eu}',
-                    '{epl}',
-                    '{localisat}',
-                    '{type_plan}',
-                    '{b_etude}',
-                    '{str(entreprise)}',
-                    '{date_str}',
-                    '{echelle}',
-                    '{cote}',
-                    '{etat}',
-                    '{q_support}',
-                    '{nom_fichier}',
-                    '{utilisat}'
-                );"""
-                print(sql)
-                self.log_to_console(f"[INFO] sql request: {sql}")
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                );""".format(psycopg2.extensions.quote_ident(database["schema"], conn))
+                
+                values = (
+                    id_source, depco, no_origine, aep, eu, epl, localisat, 
+                    type_plan, b_etude, str(entreprise), date_str, echelle, 
+                    cote, etat, q_support, nom_fichier, utilisat
+                )
+                
                 cursor = conn.cursor()
+                cursor.execute(sql, values)
                 self.log_to_console(f"[INFO] executing sql request")
-                cursor.execute(sql)
                 self.log_to_console(f"[INFO] commiting changes")
                 conn.commit()
                 cursor.close()
@@ -2111,7 +2119,6 @@ class DourBaseDialog(QDialog):
             try:
                 result = subprocess.run(
                     [bat_path],
-                    shell=True,
                     check=True,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -2169,7 +2176,6 @@ class DourBaseDialog(QDialog):
                 try:
                     result = subprocess.run(
                         [bat_path],
-                        shell=True,
                         check=True,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,

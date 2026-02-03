@@ -1,15 +1,14 @@
 import os
 import zipfile
 import tempfile
-import json
 import logging
 from datetime import datetime
 from qgis.PyQt.QtWidgets import (QMessageBox, QDialog, QVBoxLayout, 
                                 QCheckBox, QDialogButtonBox, QLabel)
-from qgis.core import QgsApplication
-from qgis.PyQt.QtCore import QSettings, Qt
+from qgis.PyQt.QtCore import QSettings
 
 logger = logging.getLogger('DourBase')
+
 
 def select_export_categories(parent_widget=None):
     """
@@ -19,13 +18,13 @@ def select_export_categories(parent_widget=None):
     dialog = QDialog(parent_widget)
     dialog.setWindowTitle("Sélection des catégories d'export")
     dialog.setMinimumWidth(400)
-    
+
     layout = QVBoxLayout(dialog)
-    
+
     info_label = QLabel("Sélectionnez les catégories de données à exporter :")
     info_label.setWordWrap(True)
     layout.addWidget(info_label)
-    
+
     categories = {
         'logs': ("Logs du plugin", "Inclure les fichiers de logs du plugin"),
         'config': ("Configuration", "Inclure les paramètres de configuration actuels"),
@@ -40,12 +39,12 @@ def select_export_categories(parent_widget=None):
         checkbox.setChecked(True)
         layout.addWidget(checkbox)
         checkboxes[key] = checkbox
-    
+
     button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
     button_box.accepted.connect(dialog.accept)
     button_box.rejected.connect(dialog.reject)
     layout.addWidget(button_box)
-    
+
     if dialog.exec_() == QDialog.Accepted:
         return {
             'logs': checkboxes['logs'].isChecked(),
@@ -54,6 +53,7 @@ def select_export_categories(parent_widget=None):
             'build_info': checkboxes['build_info'].isChecked()
         }
     return None
+
 
 def export_plugin_data(parent_widget=None):
     """
@@ -64,7 +64,7 @@ def export_plugin_data(parent_widget=None):
     if not categories:
         logger.info("Export annulé par l'utilisateur")
         return None
-    
+
     if not any(categories.values()):
         QMessageBox.warning(
             parent_widget,
@@ -72,15 +72,15 @@ def export_plugin_data(parent_widget=None):
             "Veuillez sélectionner au moins une catégorie à exporter."
         )
         return export_plugin_data(parent_widget)
-    
+
     msg_box = QMessageBox(parent_widget)
     msg_box.setIcon(QMessageBox.Information)
     msg_box.setWindowTitle("Confirmation avant collecte des données")
     msg_box.setText("Export des données du plugin")
-    
+
     selected_categories = []
     details = []
-    
+
     if categories['logs']:
         selected_categories.append("les logs du plugin")
         details.append("- Le nom de la base de données")
@@ -93,41 +93,41 @@ def export_plugin_data(parent_widget=None):
         selected_categories.append("les métadonnées du plugin")
     if categories['build_info']:
         selected_categories.append("les informations de build")
-    
+
     if len(selected_categories) == 1:
         categories_text = selected_categories[0]
     elif len(selected_categories) == 2:
         categories_text = " et ".join(selected_categories)
     else:
         categories_text = ", ".join(selected_categories[:-1]) + " et " + selected_categories[-1]
-    
+
     message = f"Vous allez générer un fichier ZIP contenant {categories_text}."
-    
+
     if details:
         message += "\n\nCe fichier peut exposer des données sensibles selon le contexte :\n" + "\n".join(details)
-    
+
     if categories['logs']:
         message += "\n\nNote : Les mots de passe ne sont pas inclus dans ce ZIP."
-    
+
     message += "\n\nDemandez l'accord d'un administrateur système si nécessaire avant de procéder."
-    
+
     msg_box.setInformativeText(message)
     msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
     msg_box.setDefaultButton(QMessageBox.Cancel)
-    
+
     if msg_box.exec_() != QMessageBox.Ok:
         logger.info("Export annulé par l'utilisateur")
         return None
-        
+
     try:
         temp_dir = tempfile.mkdtemp()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         zip_path = os.path.join(temp_dir, f"dourbase_export_{timestamp}.zip")
         logger.debug(f"Création du fichier d'export temporaire: {zip_path}")
-        
+
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             plugin_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            
+
             if categories.get('logs', False):
                 logs_dir = os.path.join(plugin_dir, 'logs')
                 if os.path.exists(logs_dir):
@@ -143,19 +143,19 @@ def export_plugin_data(parent_widget=None):
                                     file_path = os.path.join(root, file)
                                     rel_path = os.path.join('logs', os.path.basename(src_path), file)
                                     zipf.write(file_path, rel_path)
-            
+
             if categories.get('build_info', False):
                 build_info_path = os.path.join(plugin_dir, 'build_infos.txt')
                 if os.path.exists(build_info_path):
                     zipf.write(build_info_path, 'build_infos.txt')
                     logger.debug("Fichier build_infos.txt ajouté à l'export")
-            
+
             if categories.get('metadata', False):
                 metadata_path = os.path.join(plugin_dir, 'metadata.txt')
                 if os.path.exists(metadata_path):
                     zipf.write(metadata_path, 'metadata.txt')
                     logger.debug("Fichier metadata.txt ajouté à l'export")
-            
+
             if categories.get('config', False):
                 s = QSettings()
                 configs = {}
@@ -165,7 +165,7 @@ def export_plugin_data(parent_widget=None):
                         configs[key] = s.value(key)
                 s.endGroup()
                 logger.debug(f"{len(configs)} paramètres de configuration récupérés")
-                
+
                 if configs:
                     configs_path = os.path.join(temp_dir, 'configs.txt')
                     with open(configs_path, 'w', encoding='utf-8') as f:
@@ -175,10 +175,10 @@ def export_plugin_data(parent_widget=None):
                     
                     zipf.write(configs_path, 'configs.txt')
                     os.remove(configs_path)
-        
+
         logger.info(f"Export terminé avec succès: {zip_path}")
         return zip_path
-        
+
     except Exception as e:
         QMessageBox.critical(
             parent_widget,
