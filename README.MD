@@ -13,7 +13,7 @@
 ## Auteur & Contact
 
 Développé par la **Communauté Lesneven Côte des Légendes (CLCL)**  
-Contact : [sig@clcl.hzh](mailto:sig@clcl.hzh)
+Contact : [sig@clcl.bzh](mailto:sig@clcl.bzh)
 
 ## Licences
 
